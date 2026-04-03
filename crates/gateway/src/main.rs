@@ -1,5 +1,5 @@
 use gateway::{Context, Pipeline, TransformPlugin, PassthroughPlugin};
-use http_server::{HttpServer, Router, Method, Response, ServerConfig};
+use http_server::{HttpServer, Router, Method, ServerConfig};
 use std::sync::Arc;
 use futures::future::FutureExt;
 

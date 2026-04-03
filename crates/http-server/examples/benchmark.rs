@@ -1,4 +1,4 @@
-use http_server::{HttpServer, Router, Method, Response};
+use http_server::{HttpServer, Router, Method, Response, ServerConfig};
 use std::sync::Arc;
 use futures::future::FutureExt;
 use serde_json::json;
@@ -22,10 +22,20 @@ async fn main() -> anyhow::Result<()> {
         }.boxed()
     }));
 
-    let server = HttpServer::new(router, 1000);
+    let server = HttpServer::new(router, ServerConfig {
+        max_conns: 1000,
+        ..ServerConfig::default()
+    });
 
     println!("Ferrum Benchmark Engine: http://127.0.0.1:8080");
-    server.run_dual("127.0.0.1:8080", "127.0.0.1:3443").await?;
+    server
+        .run_dual(
+            "127.0.0.1:8080",
+            "127.0.0.1:3443",
+            "crates/http-server/cert.pem",
+            "crates/http-server/key.pem",
+        )
+        .await?;
 
     Ok(())
 }

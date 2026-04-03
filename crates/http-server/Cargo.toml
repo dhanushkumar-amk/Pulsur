@@ -24,3 +24,7 @@ rustls = { workspace = true }
 tokio-rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 rcgen = { workspace = true }
+
+[[test]]
+name = "benchmark"
+path = "tests/benchmark.rs"

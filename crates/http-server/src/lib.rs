@@ -1021,7 +1021,7 @@ mod tests {
         let mut buf: Vec<u8> = Vec::new();
         // We can't box a Vec<u8> directly as AsyncStream because Vec<u8>
         // doesn't implement AsyncRead. Use a tokio duplex instead.
-        let (mut client, mut server) = tokio::io::duplex(4096);
+        let (mut client, server) = tokio::io::duplex(4096);
 
         let res = {
             let mut r = Response::new(404);
@@ -1037,8 +1037,8 @@ mod tests {
 
         write_task.await.unwrap();
 
-        // Read from client side.
-        client.read_buf(&mut buf).await.unwrap();
+        // Read the full response after the writer side closes.
+        client.read_to_end(&mut buf).await.unwrap();
         let text = String::from_utf8_lossy(&buf);
         assert!(text.starts_with("HTTP/1.1 404 Not Found\r\n"), "Got: {}", &text[..40.min(text.len())]);
         assert!(text.contains("Content-Length: 9\r\n"));
