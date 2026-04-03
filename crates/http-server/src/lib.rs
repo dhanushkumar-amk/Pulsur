@@ -1,3 +1,54 @@
+//! Minimal async HTTP/1.1 server with **dual listeners** (plain HTTP and HTTPS), WebSocket
+//! upgrades, and a small router. TLS is implemented with **rustls** via **tokio-rustls**.
+//!
+//! # For maintainers and integrators
+//!
+//! - **Concurrency**: [`HttpServer::run_dual`] spawns two accept loops (HTTP and HTTPS). Each
+//!   accepted connection runs [`handle_generic_stack`] in its own task. An atomic counter
+//!   enforces `max_conns` across **both** listeners so HTTP and HTTPS share the same cap.
+//! - **After TLS**: The HTTPS path runs the same HTTP parser and router as cleartext; only the
+//!   outer [`tokio_rustls::TlsAcceptor`] differs.
+//! - **Keep-alive**: Connections reuse the same task for multiple requests until the client
+//!   closes, an idle timeout fires, or WebSocket upgrade hands off the stream.
+//!
+//! # Running HTTP and HTTPS together
+//!
+//! Call [`HttpServer::run_dual`] with two bind addresses (for example `127.0.0.1:8080` and
+//! `127.0.0.1:3443`). Both listeners use the same [`Router`], so routes and handlers are identical
+//! on both ports.
+//!
+//! # TLS certificates (development vs production)
+//!
+//! [`HttpServer::load_dev_cert`] loads TLS material from `cert.pem` and `key.pem` in the
+//! **process current working directory**:
+//!
+//! - If those files are missing, it **generates** a self-signed certificate (via `rcgen`) valid
+//!   for `localhost` and `127.0.0.1`, writes the PEM files, then loads them.
+//! - Browsers and `curl` will warn or fail verification against that cert unless you disable
+//!   verification (e.g. `curl -k https://127.0.0.1:3443/`).
+//!
+//! For production, replace `cert.pem` / `key.pem` with a real chain and key (same PEM format)
+//! **before** shipping, or extend the loader to read paths from configuration. Never rely on
+//! JIT self-signed certs outside local development.
+//!
+//! # Example (executable crate)
+//!
+//! ```no_run
+//! use http_server::{HttpServer, Router, Method, Response};
+//! use std::sync::Arc;
+//! use futures::future::FutureExt;
+//!
+//! # async fn demo() -> Result<(), http_server::HttpError> {
+//! let mut router = Router::new();
+//! router.add_http(Method::GET, "/", Arc::new(|_req| {
+//!     async move { Response::new(200) }.boxed()
+//! }));
+//! let server = HttpServer::new(router, 100);
+//! server.run_dual("127.0.0.1:8080", "127.0.0.1:3443").await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncRead, AsyncWrite};
 use tokio::time::{timeout, Duration};
@@ -13,12 +64,8 @@ use serde::de::DeserializeOwned;
 use sha1::{Sha1, Digest};
 use base64::Engine;
 
-// TLS & Cryptography
 use tokio_rustls::TlsAcceptor;
 use rcgen::generate_simple_self_signed;
-
-/// 🍱 Phase 10: HTTP Server TLS Support
-/// HTTPS, Dual-Port Listeners, and Automatic Dev Cert Generation.
 
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -36,6 +83,7 @@ pub enum HttpError {
     Serialization(String),
     #[error("WebSocket Error: {0}")]
     WebSocket(String),
+    /// Certificate load, key parse, or rustls server configuration failure.
     #[error("TLS Error: {0}")]
     Tls(String),
 }
@@ -192,6 +240,9 @@ impl WebSocket {
     }
 }
 
+/// Shared HTTP / HTTPS server state: routes, global connection limit, and active connection count.
+///
+/// Construct with [`HttpServer::new`], then start listeners with [`HttpServer::run_dual`].
 pub struct HttpServer {
     router: Arc<Router>,
     active_conns: Arc<AtomicUsize>,
@@ -199,10 +250,16 @@ pub struct HttpServer {
 }
 
 impl HttpServer {
+    /// Wraps `router` in an `Arc` and sets the maximum number of concurrent connections
+    /// (accepted TCP streams being handled) across HTTP and HTTPS combined.
     pub fn new(router: Router, max_conns: usize) -> Self {
         Self { router: Arc::new(router), active_conns: Arc::new(AtomicUsize::new(0)), max_conns }
     }
 
+    /// Builds a [`TlsAcceptor`] from `cert.pem` and `key.pem` in the current working directory.
+    ///
+    /// See the [crate-level documentation](crate#tls-certificates-development-vs-production) for
+    /// file layout, auto-generation behavior, and production guidance.
     pub fn load_dev_cert() -> Result<TlsAcceptor, HttpError> {
         let cert_path = "cert.pem";
         let key_path = "key.pem";
@@ -231,6 +288,11 @@ impl HttpServer {
         Ok(TlsAcceptor::from(Arc::new(config)))
     }
 
+    /// Listens on `http_addr` (cleartext) and `https_addr` (TLS) until both accept loops end.
+    ///
+    /// Loads TLS once via [`Self::load_dev_cert`], then accepts in parallel: HTTP connections go
+    /// straight to [`handle_generic_stack`]; HTTPS connections complete a TLS handshake first.
+    /// Both paths share `self.router` and `self.max_conns`.
     pub async fn run_dual(&self, http_addr: &str, https_addr: &str) -> Result<(), HttpError> {
         let http_listener = TcpListener::bind(http_addr).await?;
         let https_listener = TcpListener::bind(https_addr).await?;
@@ -283,8 +345,13 @@ impl HttpServer {
     }
 }
 
+/// One connection: parse requests, dispatch [`Router`] matches, write responses; optionally upgrade
+/// to WebSocket and run the WS handler until it returns.
+///
+/// `stream` is either plain TCP or a [`tokio_rustls`] server session — both implement
+/// [`AsyncStream`].
 async fn handle_generic_stack(mut stream: Box<dyn AsyncStream>, router: Arc<Router>) -> Result<(), HttpError> {
-    // 🛰️ HIGH-PERFORMANCE KEEP-ALIVE LOOP
+    // HTTP/1.1 persistent connections: same task serves multiple requests until closed or WS handoff.
     loop {
         let req = match timeout(Duration::from_secs(5), parse_complete_request(&mut stream)).await {
             Ok(Ok(r)) => r,
