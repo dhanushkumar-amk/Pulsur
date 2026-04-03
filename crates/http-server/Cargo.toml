@@ -17,3 +17,5 @@ tracing = { workspace = true }
 http = { workspace = true }
 futures = { workspace = true }
 flate2 = { workspace = true }
+sha1 = { workspace = true }
+base64 = { workspace = true }
