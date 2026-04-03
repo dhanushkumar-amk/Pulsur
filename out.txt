@@ -1,0 +1,78 @@
+warning: C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\pulsar-server\Cargo.toml: `default-features` is ignored for tracing-subscriber, since `default-features` was not specified for `workspace.dependencies.tracing-subscriber`, this could become a hard error in the future
+    Checking http_server v0.1.0 (C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\http-server)
+warning: unused import: `TcpStream`
+ --> crates\http-server\src\lib.rs:1:31
+  |
+1 | use tokio::net::{TcpListener, TcpStream};
+  |                               ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Duration` and `timeout`
+ --> crates\http-server\src\lib.rs:3:19
+  |
+3 | use tokio::time::{timeout, Duration};
+  |                   ^^^^^^^  ^^^^^^^^
+
+warning: unused imports: `debug`, `error`, and `warn`
+  --> crates\http-server\src\lib.rs:10:21
+   |
+10 | use tracing::{info, warn, debug, error};
+   |                     ^^^^  ^^^^^  ^^^^^
+
+warning: unused import: `flate2::write::GzEncoder`
+  --> crates\http-server\src\lib.rs:13:5
+   |
+13 | use flate2::write::GzEncoder;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `flate2::Compression`
+  --> crates\http-server\src\lib.rs:14:5
+   |
+14 | use flate2::Compression;
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `CertificateDer` and `PrivateKeyDer`
+  --> crates\http-server\src\lib.rs:20:25
+   |
+20 | use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+   |                         ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+error[E0599]: no method named `serialize_pem` found for struct `rcgen::CertifiedKey` in the current scope
+   --> crates\http-server\src\lib.rs:206:44
+    |
+206 | ...   std::fs::write(cert_path, cert.serialize_pem().map_err(|e| HttpError::Tls(e.to_string()))?).map_err(|e| HttpError::Tls(e.to_s...
+    |                                      ^^^^^^^^^^^^^ method not found in `rcgen::CertifiedKey`
+    |
+help: one of the expressions' fields has a method of the same name
+    |
+206 |             std::fs::write(cert_path, cert.key_pair.serialize_pem().map_err(|e| HttpError::Tls(e.to_string()))?).map_err(|e| HttpError::Tls(e.to_string()))?;
+    |                                            +++++++++
+
+error[E0282]: type annotations needed
+   --> crates\http-server\src\lib.rs:206:69
+    |
+206 | ...   std::fs::write(cert_path, cert.serialize_pem().map_err(|e| HttpError::Tls(e.to_string()))?).map_err(|e| HttpError::Tls(e.to_s...
+    |                                                               ^                 - type must be known at this point
+    |
+help: consider giving this closure parameter an explicit type
+    |
+206 |             std::fs::write(cert_path, cert.serialize_pem().map_err(|e: /* Type */| HttpError::Tls(e.to_string()))?).map_err(|e| HttpError::Tls(e.to_string()))?;
+    |                                                                      ++++++++++++
+
+error[E0599]: no method named `serialize_private_key_pem` found for struct `rcgen::CertifiedKey` in the current scope
+   --> crates\http-server\src\lib.rs:207:43
+    |
+207 |             std::fs::write(key_path, cert.serialize_private_key_pem()).map_err(|e| HttpError::Tls(e.to_string()))?;
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `rcgen::CertifiedKey`
+
+warning: unused import: `Write`
+ --> crates\http-server\src\lib.rs:8:15
+  |
+8 | use std::io::{Write as StdWrite, BufReader, Cursor};
+  |               ^^^^^
+
+Some errors have detailed explanations: E0282, E0599.
+For more information about an error, try `rustc --explain E0282`.
+warning: `http_server` (lib) generated 7 warnings
+error: could not compile `http_server` (lib) due to 3 previous errors; 7 warnings emitted

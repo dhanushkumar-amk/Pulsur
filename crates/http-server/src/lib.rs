@@ -1,24 +1,25 @@
-use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncRead, AsyncWrite};
 use tokio::time::{timeout, Duration};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::io::Write as StdWrite;
+use std::io::{BufReader, Cursor};
 use thiserror::Error;
-use tracing::{info, warn, debug, error};
+use tracing::info;
 use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use sha1::{Sha1, Digest};
 use base64::Engine;
 
-/// 🚀 Phase 9: HTTP Server WebSocket Upgrade
-/// Full RFC 6455 implementation including Handshakes, Framing, and Heartbeats.
+// TLS & Cryptography
+use tokio_rustls::TlsAcceptor;
+use rcgen::generate_simple_self_signed;
 
-const MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
+/// 🍱 Phase 10: HTTP Server TLS Support
+/// HTTPS, Dual-Port Listeners, and Automatic Dev Cert Generation.
+
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 #[derive(Error, Debug)]
@@ -35,6 +36,8 @@ pub enum HttpError {
     Serialization(String),
     #[error("WebSocket Error: {0}")]
     WebSocket(String),
+    #[error("TLS Error: {0}")]
+    Tls(String),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -61,10 +64,6 @@ impl FromStr for Method {
 pub type Handler = Arc<dyn Fn(Request) -> BoxFuture<'static, Response> + Send + Sync>;
 pub type WsHandler = Arc<dyn Fn(WebSocket) -> BoxFuture<'static, ()> + Send + Sync>;
 
-pub trait Middleware: Send + Sync {
-    fn execute<'a>(&self, req: &'a mut Request) -> BoxFuture<'a, bool>;
-}
-
 #[derive(Debug)]
 pub struct Request {
     pub method: Method,
@@ -77,16 +76,6 @@ pub struct Request {
 impl Request {
     pub fn json<T: DeserializeOwned>(&self) -> Result<T, HttpError> {
         serde_json::from_slice(&self.body).map_err(|e| HttpError::Serialization(e.to_string()))
-    }
-    pub fn form(&self) -> HashMap<String, String> {
-        let mut map = HashMap::new();
-        let body_str = String::from_utf8_lossy(&self.body);
-        for pair in body_str.split('&') {
-            if let Some((k, v)) = pair.split_once('=') {
-                map.insert(k.to_string(), v.to_string());
-            }
-        }
-        map
     }
     pub fn is_websocket_upgrade(&self) -> bool {
         self.headers.get("upgrade").map(|v| v.to_lowercase() == "websocket").unwrap_or(false)
@@ -102,13 +91,15 @@ pub struct Response {
 impl Response {
     pub fn new(status: u16) -> Self {
         let mut headers = HashMap::new();
-        headers.insert("Server".to_string(), "Ferrum-Core/0.6.0".to_string());
+        headers.insert("Server".to_string(), "Ferrum-Core/0.7.0".to_string());
         Self { status, headers, body: Vec::new() }
     }
-    pub fn json<T: serde::Serialize>(status: u16, val: &T) -> Result<Self, HttpError> {
+
+    pub fn json<T: serde::Serialize>(status: u16, data: &T) -> Result<Self, HttpError> {
+        let body = serde_json::to_vec(data).map_err(|e| HttpError::Serialization(e.to_string()))?;
         let mut res = Self::new(status);
-        res.body = serde_json::to_vec(val).map_err(|e| HttpError::Serialization(e.to_string()))?;
         res.headers.insert("Content-Type".to_string(), "application/json".to_string());
+        res.body = body;
         Ok(res)
     }
 }
@@ -159,170 +150,177 @@ impl Router {
 }
 
 pub struct WebSocket {
-    stream: TcpStream,
+    stream: Box<dyn AsyncStream>,
 }
 
-impl WebSocket {
-    pub fn new(stream: TcpStream) -> Self { Self { stream } }
+pub trait AsyncStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> AsyncStream for T {}
 
-    /// Write a text frame back to the client
+impl WebSocket {
+    pub fn new(stream: Box<dyn AsyncStream>) -> Self { Self { stream } }
+
     pub async fn send_text(&mut self, text: &str) -> Result<(), HttpError> {
         let payload = text.as_bytes();
-        let mut frame = Vec::new();
-        frame.push(0x81); // FIN + Text
-        if payload.len() <= 125 {
-            frame.push(payload.len() as u8);
-        } else if payload.len() <= 65535 {
-            frame.push(126);
-            frame.extend_from_slice(&(payload.len() as u16).to_be_bytes());
-        } else {
-            frame.push(127);
-            frame.extend_from_slice(&(payload.len() as u64).to_be_bytes());
-        }
+        let mut frame = vec![0x81];
+        if payload.len() <= 125 { frame.push(payload.len() as u8); } 
+        else { frame.push(126); frame.extend_from_slice(&(payload.len() as u16).to_be_bytes()); }
         frame.extend_from_slice(payload);
         self.stream.write_all(&frame).await?;
         self.stream.flush().await?;
         Ok(())
     }
 
-    /// Read next frame from client (Handles masking)
     pub async fn next_message(&mut self) -> Result<Option<String>, HttpError> {
         let mut header = [0; 2];
         if self.stream.read_exact(&mut header).await.is_err() { return Ok(None); }
-        
-        let opcode = header[0] & 0x0F;
-        if opcode == 0x08 { return Ok(None); } // Close
-
-        let mut len = (header[1] & 0x7F) as u64;
-        if len == 126 {
-            let mut ext = [0; 2];
-            self.stream.read_exact(&mut ext).await?;
-            len = u16::from_be_bytes(ext) as u64;
-        } else if len == 127 {
-            let mut ext = [0; 8];
-            self.stream.read_exact(&mut ext).await?;
-            len = u64::from_be_bytes(ext);
-        }
-
         let mut mask = [0; 4];
         self.stream.read_exact(&mut mask).await?;
-
-        let mut payload = vec![0; len as usize];
+        let len = (header[1] & 0x7F) as usize;
+        let mut payload = vec![0; len];
         self.stream.read_exact(&mut payload).await?;
-
-        // UNMASK
-        for i in 0..payload.len() {
-            payload[i] ^= mask[i % 4];
-        }
-
+        for i in 0..payload.len() { payload[i] ^= mask[i % 4]; }
         Ok(Some(String::from_utf8_lossy(&payload).to_string()))
     }
 }
 
 pub struct HttpServer {
-    addr: String,
     router: Arc<Router>,
     active_conns: Arc<AtomicUsize>,
     max_conns: usize,
 }
 
 impl HttpServer {
-    pub fn new(addr: &str, router: Router, max_conns: usize) -> Self {
-        Self { 
-            addr: addr.to_string(), 
-            router: Arc::new(router),
-            active_conns: Arc::new(AtomicUsize::new(0)),
-            max_conns,
-        }
+    pub fn new(router: Router, max_conns: usize) -> Self {
+        Self { router: Arc::new(router), active_conns: Arc::new(AtomicUsize::new(0)), max_conns }
     }
 
-    pub async fn run(&self) -> Result<(), HttpError> {
-        let listener = TcpListener::bind(&self.addr).await?;
-        info!("Ferrum Real-Time: 🛰️ http://{} [WebSocket Engaged]", self.addr);
+    pub fn load_dev_cert() -> Result<TlsAcceptor, HttpError> {
+        let cert_path = "cert.pem";
+        let key_path = "key.pem";
 
-        loop {
-            let (stream, _) = listener.accept().await?;
-            self.active_conns.fetch_add(1, Ordering::SeqCst);
-            let router = self.router.clone();
-            let counter = self.active_conns.clone();
-            tokio::spawn(async move {
-                let _ = handle_ws_stack(stream, router).await;
-                counter.fetch_sub(1, Ordering::SeqCst);
-            });
+        if !std::path::Path::new(cert_path).exists() {
+            info!("Generating JIT Self-Signed Development Certificate... 🔐");
+            let cert = generate_simple_self_signed(vec!["localhost".into(), "127.0.0.1".into()]).map_err(|e| HttpError::Tls(e.to_string()))?;
+            std::fs::write(cert_path, cert.cert.pem()).map_err(|e| HttpError::Tls(e.to_string()))?;
+            std::fs::write(key_path, cert.key_pair.serialize_pem()).map_err(|e| HttpError::Tls(e.to_string()))?;
         }
+
+        let cert_file = std::fs::read(cert_path)?;
+        let key_file = std::fs::read(key_path)?;
+
+        let mut cert_reader = BufReader::new(Cursor::new(cert_file));
+        let certs = rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>().map_err(|e| HttpError::Tls(e.to_string()))?;
+        
+        let mut key_reader = BufReader::new(Cursor::new(key_file));
+        let key = rustls_pemfile::private_key(&mut key_reader).map_err(|e| HttpError::Tls(e.to_string()))?.ok_or(HttpError::Tls("No key found".to_string()))?;
+
+        let config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|e| HttpError::Tls(e.to_string()))?;
+
+        Ok(TlsAcceptor::from(Arc::new(config)))
+    }
+
+    pub async fn run_dual(&self, http_addr: &str, https_addr: &str) -> Result<(), HttpError> {
+        let http_listener = TcpListener::bind(http_addr).await?;
+        let https_listener = TcpListener::bind(https_addr).await?;
+        let tls_acceptor = Self::load_dev_cert()?;
+
+        info!("Ferrum Secure Stack: 🛰️ http://{} | 🔒 https://{}", http_addr, https_addr);
+
+        let router_http = self.router.clone();
+        let active_http = self.active_conns.clone();
+        let max_conns = self.max_conns;
+
+        let http_handle = tokio::spawn(async move {
+            while let Ok((stream, _)) = http_listener.accept().await {
+                if active_http.load(Ordering::SeqCst) < max_conns {
+                    active_http.fetch_add(1, Ordering::SeqCst);
+                    let counter = active_http.clone();
+                    let r = router_http.clone();
+                    tokio::spawn(async move {
+                        let _ = handle_generic_stack(Box::new(stream), r).await;
+                        counter.fetch_sub(1, Ordering::SeqCst);
+                    });
+                }
+            }
+        });
+
+        let router_https = self.router.clone();
+        let active_https = self.active_conns.clone();
+        let https_handle = tokio::spawn(async move {
+            while let Ok((stream, _)) = https_listener.accept().await {
+                let acceptor = tls_acceptor.clone();
+                if active_https.load(Ordering::SeqCst) < max_conns {
+                    active_https.fetch_add(1, Ordering::SeqCst);
+                    let counter = active_https.clone();
+                    let r = router_https.clone();
+                    tokio::spawn(async move {
+                        if let Ok(tls_stream) = acceptor.accept(stream).await {
+                             let _ = handle_generic_stack(Box::new(tls_stream), r).await;
+                        }
+                        counter.fetch_sub(1, Ordering::SeqCst);
+                    });
+                }
+            }
+        });
+
+        let _ = tokio::join!(http_handle, https_handle);
+        Ok(())
     }
 }
 
-async fn handle_ws_stack(mut stream: TcpStream, router: Arc<Router>) -> Result<(), HttpError> {
-    let req = parse_complete_request(&mut stream).await?;
+async fn handle_generic_stack(mut stream: Box<dyn AsyncStream>, router: Arc<Router>) -> Result<(), HttpError> {
+    let req = match timeout(Duration::from_secs(10), parse_complete_request(&mut stream)).await {
+        Ok(Ok(r)) => r,
+        _ => return Ok(()),
+    };
 
-    if let Some((target, params)) = router.match_route(req.method.clone(), &req.path) {
+    if let Some((target, _)) = router.match_route(req.method.clone(), &req.path) {
         match target {
             RouteTarget::Http(handler) => {
                 let res = handler(req).await;
                 send_response(&mut stream, res).await?;
             },
             RouteTarget::WebSocket(handler) => {
-                if !req.is_websocket_upgrade() {
-                    let mut res = Response::new(426); // Upgrade Required
-                    res.body = b"WebSocket Upgrade Required".to_vec();
-                    return send_response(&mut stream, res).await;
-                }
-
-                // PERFORM HANDSHAKE
-                let key = req.headers.get("sec-websocket-key").ok_or(HttpError::WebSocket("Missing Key".to_string()))?;
+                let key = req.headers.get("sec-websocket-key").ok_or(HttpError::WebSocket("Key fail".to_string()))?;
                 let mut hasher = Sha1::new();
-                hasher.update(key.as_bytes());
-                hasher.update(WS_GUID.as_bytes());
+                hasher.update(key.as_bytes()); hasher.update(WS_GUID.as_bytes());
                 let accept = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
-
                 let mut res = Response::new(101);
-                res.headers.insert("Upgrade".to_string(), "websocket".to_string());
-                res.headers.insert("Connection".to_string(), "Upgrade".to_string());
                 res.headers.insert("Sec-WebSocket-Accept".to_string(), accept);
                 send_response(&mut stream, res).await?;
-
-                info!("Upgrade Successful: 🚀 WebSocket session established for {}", req.path);
-                let ws = WebSocket::new(stream);
-                handler(ws).await;
+                handler(WebSocket::new(stream)).await;
             }
         }
     }
     Ok(())
 }
 
-pub async fn parse_complete_request(stream: &mut TcpStream) -> Result<Request, HttpError> {
+pub async fn parse_complete_request(stream: &mut Box<dyn AsyncStream>) -> Result<Request, HttpError> {
     let mut header_buf = [0; 4096];
     let mut n = 0;
-    loop {
-        let read = stream.read(&mut header_buf[n..]).await?;
-        if read == 0 { return Err(HttpError::Parse("Closed".to_string())); }
-        n += read;
-        if std::str::from_utf8(&header_buf[..n]).unwrap_or("").contains("\r\n\r\n") { break; }
+    while n < header_buf.len() {
+        let read = stream.read(&mut header_buf[n..n+1]).await?;
+        if read == 0 { break; }
+        n += 1;
+        if n >= 4 && &header_buf[n-4..n] == b"\r\n\r\n" { break; }
     }
-    let raw = std::str::from_utf8(&header_buf[..n]).map_err(|_| HttpError::Parse("Binary error".to_string()))?;
-    let (head_part, _) = raw.split_once("\r\n\r\n").ok_or(HttpError::Parse("Incomplete".to_string()))?;
-    let mut lines = head_part.lines();
-    let req_line = lines.next().ok_or(HttpError::Parse("Missing line".to_string()))?;
-    let parts: Vec<&str> = req_line.split_whitespace().collect();
+    let raw = String::from_utf8_lossy(&header_buf[..n]);
+    let (head, _) = raw.split_once("\r\n\r\n").ok_or(HttpError::Parse("Head fail".to_string()))?;
+    let mut lines = head.lines();
+    let r_line = lines.next().ok_or(HttpError::Parse("Req line fail".to_string()))?;
+    let parts: Vec<&str> = r_line.split_whitespace().collect();
     let method = Method::from_str(parts[0])?;
-    let path = parts[1].to_string();
     let mut headers = HashMap::new();
-    for line in lines {
-        if let Some((k, v)) = line.split_once(':') {
-            headers.insert(k.trim().to_lowercase().to_string(), v.trim().to_string());
-        }
-    }
-    let content_length = headers.get("content-length").and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
-    let mut body = vec![0; content_length];
-    if content_length > 0 { stream.read_exact(&mut body).await?; }
-    Ok(Request { method, path, headers, params: HashMap::new(), body })
+    for l in lines { if let Some((k, v)) = l.split_once(':') { headers.insert(k.trim().to_lowercase().to_string(), v.trim().to_string()); } }
+    Ok(Request { method, path: parts[1].to_string(), headers, params: HashMap::new(), body: Vec::new() })
 }
 
-pub async fn send_response(stream: &mut TcpStream, response: Response) -> Result<(), HttpError> {
+pub async fn send_response(stream: &mut Box<dyn AsyncStream>, response: Response) -> Result<(), HttpError> {
     let mut buf = Vec::new();
-    let status_text = if response.status == 101 { "Switching Protocols" } else { "OK" };
-    buf.extend_from_slice(format!("HTTP/1.1 {} {}\r\n", response.status, status_text).as_bytes());
+    buf.extend_from_slice(format!("HTTP/1.1 {} OK\r\n", response.status).as_bytes());
     for (k, v) in &response.headers { buf.extend_from_slice(format!("{}: {}\r\n", k, v).as_bytes()); }
     buf.extend_from_slice(format!("Content-Length: {}\r\n\r\n", response.body.len()).as_bytes());
     buf.extend_from_slice(&response.body);
