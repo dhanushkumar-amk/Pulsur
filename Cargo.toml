@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "crates/pulsar-server",
+    "crates/http-server",
     "crates/gateway",
     "crates/load-balancer",
     "crates/rate-limiter",
