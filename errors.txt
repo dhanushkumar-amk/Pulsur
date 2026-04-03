@@ -1,0 +1,15 @@
+warning: C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\pulsar-server\Cargo.toml: `default-features` is ignored for tracing-subscriber, since `default-features` was not specified for `workspace.dependencies.tracing-subscriber`, this could become a hard error in the future
+    Checking tracing v0.1.44
+    Checking nu-ansi-term v0.50.3
+    Checking h2 v0.4.13
+    Checking tower v0.5.3
+    Checking axum-core v0.4.5
+    Checking tracing-subscriber v0.3.23
+    Checking tower-http v0.6.8
+    Checking hyper v1.9.0
+    Checking hyper-util v0.1.20
+    Checking hyper-tls v0.6.0
+    Checking axum v0.7.9
+    Checking reqwest v0.12.28
+    Checking gateway v0.1.0 (C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\gateway)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.27s

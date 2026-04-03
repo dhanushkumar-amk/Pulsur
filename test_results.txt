@@ -1,0 +1,78 @@
+warning: C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\pulsar-server\Cargo.toml: `default-features` is ignored for tracing-subscriber, since `default-features` was not specified for `workspace.dependencies.tracing-subscriber`, this could become a hard error in the future
+warning: variable does not need to be mutable
+   --> crates\gateway\src\lib.rs:272:13
+    |
+272 | ... let mut req = Reques...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates\gateway\src\lib.rs:279:13
+    |
+279 | ... let mut ctx = Contex...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\gateway\src\lib.rs:301:13
+    |
+301 | ... let mut req = Reques...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\gateway\src\lib.rs:308:13
+    |
+308 | ... let mut ctx = Contex...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\gateway\src\lib.rs:324:13
+    |
+324 | ... let mut ctx = Contex...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\gateway\src\lib.rs:347:13
+    |
+347 | ... let mut ctx = Contex...
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: `gateway` (lib test) generated 6 warnings (run `cargo fix --lib -p gateway --tests` to apply 6 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running unittests src\lib.rs (target\debug\deps\gateway-ed8f106ddd5b875b.exe)
+
+running 4 tests
+test tests::test_auth_plugin_bypass_path ... ok
+test tests::test_auth_plugin_missing_header ... ok
+test tests::test_auth_plugin_expired_token ... FAILED
+test tests::test_auth_plugin_valid_token ... ok
+
+failures:
+
+---- tests::test_auth_plugin_expired_token stdout ----
+
+thread 'tests::test_auth_plugin_expired_token' (9980) panicked at crates\gateway\src\lib.rs:313:9:
+assertion `left == right` failed
+  left: 404
+ right: 401
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::test_auth_plugin_expired_token
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p gateway --lib`
