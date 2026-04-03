@@ -32,3 +32,4 @@ logs/
 tarpaulin-report.html
 *.gcda
 *.gcno
+build_output.txt

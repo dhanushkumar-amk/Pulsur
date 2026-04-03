@@ -9,7 +9,7 @@ members = [
     "crates/queue",
     "crates/circuit-breaker",
     "crates/proxy",
-    "crates/observability",
+    "crates/observability", "crates/fundamentals",
 ]
 
 [workspace.package]
