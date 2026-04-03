@@ -1,0 +1,23 @@
+# Maximum width of each line
+max_width = 100
+
+# Use Unix-style line endings
+newline_style = "Unix"
+
+# Put the closing brace of a multiline array/struct on its own line
+indent_style = "Block"
+
+# Sort imports alphabetically
+reorder_imports = true
+
+# Use field-init shorthand for struct initialization
+use_field_init_shorthand = true
+
+# Force trailing commas on multiline structures
+trailing_comma = "Vertical"
+
+# Merge imports from the same crate
+imports_granularity = "Crate"
+
+# Remove redundant aliases
+remove_nested_redundancy = true

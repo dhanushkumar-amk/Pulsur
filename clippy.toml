@@ -1,0 +1,19 @@
+# Clippy Configuration for Ferrum
+
+# Disallowed methods that are potentially dangerous
+# disallowed-methods = [
+#     "std::env::set_var", # Environment variables are not thread-safe to set dynamically
+# ]
+
+# Avoid extremely complex functions
+too-many-arguments-threshold = 6
+
+# Enforce MSRV (Minimum Supported Rust Version) to match workspace
+msrv = "1.75.0"
+
+# Require documentation for public exports
+# (This can also be enforced via `deny(missing_docs)` in code)
+missing-docs-in-crate-items = true
+
+# Allow specific types of comments
+# allow-unwrap-in-tests = true

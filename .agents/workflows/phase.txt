@@ -1,0 +1,1592 @@
+# 🔩 Ferrum — Complete 70-Phase Production Roadmap
+
+> Rust-powered infrastructure for Node.js · Zero dependencies · 10x faster
+**Role:** Senior Backend Engineer · **Timeline:** ~6 months · **Goal:** Build + Ship to npm
+>
+
+---
+
+## 🗂️ Phase Index
+
+| Range | Section |
+| --- | --- |
+| Phase 0–4 | Foundation & Environment |
+| Phase 5–14 | HTTP Server (Rust) |
+| Phase 15–22 | API Gateway (Rust) |
+| Phase 23–29 | Load Balancer (Rust) |
+| Phase 30–35 | Rate Limiter (Rust) |
+| Phase 36–43 | Message Queue (Rust) |
+| Phase 44–47 | Circuit Breaker (Rust) |
+| Phase 48–51 | Reverse Proxy (Rust) |
+| Phase 52–55 | Observability Agent (Rust) |
+| Phase 56–59 | JS SDK + Node.js Bridge |
+| Phase 60–62 | npm Publishing Pipeline |
+| Phase 63–65 | Documentation & Website |
+| Phase 66–69 | Testing & Benchmarking |
+| Phase 70 | Final: Before vs After Report |
+
+---
+
+# 📦 SECTION 1 — FOUNDATION
+
+---
+
+## ☐ Phase 0 — Monorepo & Workspace Setup
+
+**Tag:** `Infra` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Create GitHub repo: `ferrum` with MIT license and root README.md
+- [ ]  Create `Cargo.toml` at root with `[workspace]` and `members = ["crates/*"]`
+- [ ]  Create `crates/` folder with sub-crates: `http-server`, `gateway`, `load-balancer`, `rate-limiter`, `queue`, `circuit-breaker`, `proxy`, `observability`
+- [ ]  Create `packages/` folder: `js-sdk` (Node.js), `dashboard` (Next.js)
+- [ ]  Create `.github/workflows/` for CI/CD pipelines
+- [ ]  Add `rustfmt.toml` and `clippy.toml` with strict linting rules
+- [ ]  Add `.gitignore` for Rust (`target/`), Node (`node_modules/`), env files
+- [ ]  Add `CONTRIBUTING.md` with commit message conventions (`feat:`, `fix:`, `chore:`)
+- [ ]  Add `workspace.dependencies` in root `Cargo.toml` to share `tokio`, `serde`, etc.
+- [ ]  Verify: `cargo build --workspace` succeeds with zero errors
+
+### What you learn
+
+- How Cargo workspaces share dependencies across crates
+- Monorepo structure used by real Rust projects (Biome, Turbo)
+- Why a single `Cargo.lock` at the root matters for reproducible builds
+
+---
+
+## ☐ Phase 1 — Rust Language Fundamentals
+
+**Tag:** `Rust` · **Estimated time:** 5 days
+
+### What to implement
+
+- [ ]  Read Rust Book chapters 1–10 (ownership, borrowing, lifetimes, structs, enums, traits)
+- [ ]  Write program 1: Linked list using `Box<T>` — no `Vec`, raw recursive struct
+- [ ]  Write program 2: Stack implementation with `push`, `pop`, `peek` using generics
+- [ ]  Write program 3: HashMap from scratch using array of linked lists (chaining)
+- [ ]  Write program 4: TCP echo server using `std::net::TcpListener` (blocking)
+- [ ]  Write program 5: Thread pool with `N` workers using `Arc<Mutex<Receiver>>`
+- [ ]  Add `#[cfg(test)]` unit tests for every program — minimum 5 tests each
+- [ ]  Run `cargo clippy` and fix every warning before moving on
+
+### What you learn
+
+- Ownership model — why Rust has no garbage collector
+- Stack vs heap allocation (`Box<T>` forces heap)
+- `Arc<T>` vs `Rc<T>` — thread-safe vs single-threaded reference counting
+- `Mutex<T>` for safe shared mutable state across threads
+- Why `Send + Sync` traits exist and what they guarantee
+
+---
+
+## ☐ Phase 2 — Tokio Async Runtime Deep Dive
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Add `tokio = { version = "1", features = ["full"] }` to a test crate
+- [ ]  Build multi-threaded TCP echo server using `tokio::net::TcpListener`
+- [ ]  Use `tokio::spawn` to handle each connection on a separate task
+- [ ]  Handle 1000 concurrent connections — measure with `wrk` benchmarking tool
+- [ ]  Learn `tokio::select!` — write a server that races a timeout against a read
+- [ ]  Learn `tokio::time::interval` — write a heartbeat that fires every 5 seconds
+- [ ]  Learn `tokio::sync::mpsc` — producer/consumer channel between tasks
+- [ ]  Write test: spawn 100 tasks, each sends a message, verify all received
+
+### What you learn
+
+- How Tokio schedules tasks across OS threads using work-stealing
+- Why `async fn` in Rust is zero-cost (no heap allocation per await point)
+- The difference between `tokio::spawn` (task) and `async fn` (future)
+- Why async Rust is faster than Node.js event loop under CPU-heavy load
+
+---
+
+## ☐ Phase 3 — TCP & HTTP/1.1 From Scratch
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Read RFC 7230 — understand HTTP/1.1 request/response byte format
+- [ ]  Write raw TCP server that reads bytes from socket into a `[u8; 4096]` buffer
+- [ ]  Parse HTTP request line: extract method, path, HTTP version from `&[u8]`
+- [ ]  Parse headers: split on `\r\n`, build `HashMap<String, String>`
+- [ ]  Parse `Content-Length` and read exact body bytes
+- [ ]  Serialize HTTP response: status line + `\r\n` + headers + `\r\n\r\n` + body
+- [ ]  Send valid `200 OK` response with `Content-Type: application/json` body
+- [ ]  Test with `curl -v` — verify raw request/response in terminal
+
+### What you learn
+
+- What HTTP actually is — plain text bytes over a TCP socket
+- Why `Content-Length` matters — how server knows when body ends
+- What keep-alive connection means at the TCP level
+- Why web frameworks like Express are just abstraction over this
+
+---
+
+## ☐ Phase 4 — Rust Error Handling & Production Patterns
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Replace all `unwrap()` calls with proper `?` operator and `Result<T, E>` returns
+- [ ]  Define custom error enum `FerrumError` with variants for each failure mode
+- [ ]  Implement `std::fmt::Display` for `FerrumError`
+- [ ]  Use `thiserror` crate for automatic `From` implementations
+- [ ]  Use `anyhow` crate in binary crates for easy error context chaining
+- [ ]  Add structured logging with `tracing` crate: `info!`, `warn!`, `error!` macros
+- [ ]  Add `tracing-subscriber` with JSON format for production log output
+- [ ]  Write test: every error path returns correct error variant
+
+### What you learn
+
+- Why `panic!` / `unwrap()` is never acceptable in production Rust
+- `thiserror` vs `anyhow` — library errors vs application errors
+- Structured logging vs `println!` — why JSON logs matter in production
+- How `?` operator works: implicit `From` conversion + early return
+
+---
+
+# 🌐 SECTION 2 — HTTP SERVER
+
+---
+
+## ☐ Phase 5 — HTTP Server Core Engine
+
+**Tag:** `Rust` · **Estimated time:** 4 days
+
+### What to implement
+
+- [ ]  Create `crates/http-server/src/lib.rs`
+- [ ]  Define `Request` struct: `method: Method`, `path: String`, `headers: HashMap<String, String>`, `body: Vec<u8>`
+- [ ]  Define `Response` struct: `status: u16`, `headers: HashMap<String, String>`, `body: Vec<u8>`
+- [ ]  Define `Method` enum: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`, `HEAD`
+- [ ]  Implement `HttpServer::new(addr: &str)` that binds a `TcpListener`
+- [ ]  Implement async connection accept loop: `loop { let (stream, _) = listener.accept().await; tokio::spawn(handle_conn(stream)) }`
+- [ ]  Implement `parse_request(stream) -> Result<Request>` — full HTTP/1.1 parser
+- [ ]  Implement `send_response(stream, response)` — serialize and write to socket
+- [ ]  Write 10 unit tests for parser: GET with no body, POST with JSON, bad request
+
+### What you learn
+
+- Zero-copy parsing using `&[u8]` slices — no allocation per header
+- How to manage per-connection state in async Rust without `Arc` overhead
+- Why `tokio::spawn` is needed — each connection runs concurrently
+
+---
+
+## ☐ Phase 6 — HTTP Server Routing Engine
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Define `Handler` type: `Arc<dyn Fn(Request) -> BoxFuture<Response> + Send + Sync>`
+- [ ]  Define `Route` struct: `method: Method`, `pattern: String`, `handler: Handler`
+- [ ]  Implement `Router` with `Vec<Route>` internally
+- [ ]  Implement `router.get(path, handler)`, `router.post(path, handler)` etc.
+- [ ]  Implement path matching: exact → parameterized (`:id`) → wildcard ()
+- [ ]  Extract path params into `HashMap<String, String>` added to `Request`
+- [ ]  Implement middleware chain: `Vec<Box<dyn Middleware>>` runs before handler
+- [ ]  Test with 10+ routes — verify correct handler fires, params extracted correctly
+
+### What you learn
+
+- How Express.js routing works internally — it's just a Vec of patterns
+- Trie-based routing vs linear scan — O(log n) vs O(n) tradeoff
+- Trait objects `dyn Fn` for storing heterogeneous handler functions
+
+---
+
+## ☐ Phase 7 — HTTP Server Keep-Alive & Connection Management
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  After sending response, check `Connection: keep-alive` header
+- [ ]  If keep-alive, loop back and read next request on same TCP connection
+- [ ]  Implement idle timeout: drop connection after 30s using `tokio::time::timeout`
+- [ ]  Track active connections with `AtomicUsize` counter
+- [ ]  Implement max connections limit — reject with `503` when exceeded
+- [ ]  Implement graceful shutdown: stop accepting + drain active connections on `SIGTERM`
+- [ ]  Benchmark keep-alive vs no-keep-alive using `wrk` — record req/sec difference
+
+### What you learn
+
+- Why keep-alive is critical: eliminates TCP 3-way handshake per request
+- How `AtomicUsize` avoids Mutex lock for simple counters
+- What graceful shutdown means — zero dropped requests during deploy
+
+---
+
+## ☐ Phase 8 — HTTP Server Body Parsing & Content Types
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Implement JSON body parser: `serde_json::from_slice(&body)` → typed struct
+- [ ]  Implement form body parser: `application/x-www-form-urlencoded` key=value parsing
+- [ ]  Implement multipart parser for file uploads
+- [ ]  Add `Content-Type` detection and automatic parser selection
+- [ ]  Add body size limit: reject with `413 Payload Too Large` over configurable max
+- [ ]  Add gzip response compression using `flate2` crate when client sends `Accept-Encoding: gzip`
+- [ ]  Write tests: JSON body round-trip, form body, oversized body rejection
+
+### What you learn
+
+- Why `serde_json::from_slice` is faster than `from_str` — no UTF-8 copy
+- Multipart boundaries — how browsers encode file uploads
+- gzip compression tradeoff: CPU cost vs bandwidth saved
+
+---
+
+## ☐ Phase 9 — HTTP Server WebSocket Upgrade
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Detect `Upgrade: websocket` header in incoming request
+- [ ]  Perform WebSocket handshake: compute `Sec-WebSocket-Accept` from key using SHA-1 + base64
+- [ ]  Send `101 Switching Protocols` response
+- [ ]  Implement WebSocket frame parser: read FIN bit, opcode, mask bit, payload length
+- [ ]  Implement frame serializer: write server → client frames (unmasked)
+- [ ]  Implement ping/pong keepalive every 30 seconds
+- [ ]  Write echo WebSocket handler: reflect every message back to client
+- [ ]  Test with browser `new WebSocket("ws://localhost:3000")`
+
+### What you learn
+
+- WebSocket handshake — why it starts as HTTP then upgrades
+- WebSocket frame format: 2–10 byte header before payload
+- Why browser-to-server frames are masked but server-to-client are not
+
+---
+
+## ☐ Phase 10 — HTTP Server TLS Support
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Add `tokio-rustls` and `rustls` crates
+- [ ]  Load TLS certificate and private key from PEM files at startup
+- [ ]  Wrap `TcpStream` in `TlsAcceptor` for HTTPS connections
+- [ ]  Support both HTTP and HTTPS on different ports simultaneously
+- [ ]  Generate self-signed cert for development using `rcgen` crate
+- [ ]  Test: `curl -k https://localhost:3443` returns correct response
+
+### What you learn
+
+- TLS handshake at a high level: certificate exchange, key agreement
+- Why `rustls` is safer than OpenSSL — memory-safe TLS in Rust
+- SNI (Server Name Indication) — how one server serves multiple certs
+
+---
+
+## ☐ Phase 11 — HTTP Server Benchmarks
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Install `wrk` and `autocannon` benchmarking tools
+- [ ]  Benchmark baseline: Node.js `http.createServer` hello world
+- [ ]  Benchmark: Fastify hello world
+- [ ]  Benchmark: `@ferrum/http-server` hello world (same handler logic)
+- [ ]  Measure for each: req/sec, p50/p95/p99 latency, memory RSS
+- [ ]  Run `wrk -t4 -c100 -d30s` — 4 threads, 100 connections, 30 seconds
+- [ ]  Write `BENCHMARKS.md` with results table, methodology, test machine specs
+- [ ]  Add flamegraph profiling using `cargo flamegraph` — identify hotspots
+
+### What you learn
+
+- How to design a fair benchmark: warm-up period, fixed concurrency
+- What p99 latency means — the slowest 1 in 100 requests
+- Flamegraph reading — where CPU time actually goes in your server
+
+---
+
+# 🔀 SECTION 3 — API GATEWAY
+
+---
+
+## ☐ Phase 12 — Gateway Request Pipeline Design
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Define `Plugin` trait: `async fn call(&self, ctx: &mut Context, next: Next) -> Response`
+- [ ]  Define `Context` struct: request, response, metadata `HashMap`, upstream URL
+- [ ]  Define `Next` struct: wraps remaining plugin chain as a `BoxFuture`
+- [ ]  Implement `Pipeline::new(plugins: Vec<Box<dyn Plugin>>)` chain executor
+- [ ]  Implement passthrough plugin: forward request to upstream, return response verbatim
+- [ ]  Use `reqwest` crate as HTTP client to forward requests
+- [ ]  Test: `curl gateway:3000/api` → Node.js app `4000/api` → response back to curl
+
+### What you learn
+
+- Middleware pipeline pattern — same design as Axum, Actix, Koa
+- How trait objects enable runtime-composable plugin chains
+- Why `BoxFuture` is needed for async trait methods in Rust
+
+---
+
+## ☐ Phase 13 — Gateway JWT Auth Plugin
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Add `jsonwebtoken` crate to gateway
+- [ ]  Implement `AuthPlugin`: extract `Bearer <token>` from `Authorization` header
+- [ ]  Verify signature using HS256 (shared secret) — configurable algorithm
+- [ ]  Check `exp` claim — reject expired tokens with `401`
+- [ ]  Check `iss` and `aud` claims if configured
+- [ ]  Attach decoded claims to `Context` metadata for downstream plugins
+- [ ]  Implement bypass list: `Vec<String>` of paths that skip auth (e.g. `/health`, `/login`)
+- [ ]  Write tests: valid token passes, expired token `401`, wrong algo `401`, bypass path passes
+
+### What you learn
+
+- JWT structure: base64(header).base64(payload).signature
+- Why HS256 is symmetric (same key signs and verifies) vs RS256 asymmetric
+- Why you must always verify signature — never trust claims alone
+
+---
+
+## ☐ Phase 14 — Gateway Request & Response Transformation
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Implement header injection: add `X-Request-ID` (UUID v4), `X-Forwarded-For` (client IP)
+- [ ]  Implement header stripping: remove internal headers before sending to client
+- [ ]  Implement path rewriting: `/api/v1/users` → `/users` via configurable prefix strip
+- [ ]  Implement response header injection: add `CORS` headers on every response
+- [ ]  Implement request body transformation: modify JSON fields before forwarding
+- [ ]  Implement response body transformation: remove internal fields from JSON response
+- [ ]  Write `TransformPlugin::from_config(yaml: &str)` constructor
+- [ ]  Test all transformations with `curl -v` — inspect actual headers in output
+
+### What you learn
+
+- Why API gateways need to transform: versioning, auth enrichment, CORS
+- How Kong plugins work at a conceptual level
+- `serde_json::Value` for schema-agnostic JSON manipulation
+
+---
+
+## ☐ Phase 15 — Gateway Config File & Hot Reload
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Design `ferrum-gateway.yaml` config format — document every field
+- [ ]  Add `serde` + `serde_yaml` to parse config at startup
+- [ ]  Build CLI using `clap` crate: `ferrum-gateway start --config gateway.yaml`
+- [ ]  Implement hot reload: watch config file with `notify` crate
+- [ ]  On file change: re-parse config, rebuild pipeline, swap atomically with `ArcSwap`
+- [ ]  Validate config at startup: missing upstream → clear error message with line number
+- [ ]  Write `examples/gateway.yaml` with comments explaining every option
+
+### What you learn
+
+- `ArcSwap` for lock-free atomic pointer swapping — no Mutex needed
+- File watching using `inotify` (Linux) / `kqueue` (macOS) under the hood
+- How Nginx does config reload: `nginx -s reload` sends SIGHUP
+
+---
+
+## ☐ Phase 16 — Gateway Rate Limiting Plugin
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Integrate `ferrum-rate-limiter` crate as a gateway plugin
+- [ ]  Extract rate limit key: `X-API-Key` header, then JWT `sub` claim, then IP fallback
+- [ ]  Configure per-route rate limits in `gateway.yaml`
+- [ ]  Return `429 Too Many Requests` with `Retry-After` and `X-RateLimit-*` headers
+- [ ]  Add rate limit status to gateway metrics
+
+### What you learn
+
+- Plugin composition — gateway reuses rate limiter crate without copy-paste
+- Why key selection order matters: API key > user ID > IP
+
+---
+
+## ☐ Phase 17 — Gateway Upstream Health & Retry
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  On upstream `5xx` or timeout: retry up to 3 times with exponential backoff
+- [ ]  Backoff formula: `wait = base * 2^attempt + random_jitter`
+- [ ]  Add `X-Retry-Count` header to upstream request on retry
+- [ ]  If all retries fail: return `502 Bad Gateway` with error body
+- [ ]  Implement timeout per upstream call: configurable, default 30s
+- [ ]  Log every retry with: attempt number, upstream URL, error reason, wait duration
+
+### What you learn
+
+- Exponential backoff with jitter — why jitter prevents thundering herd
+- The difference between retry (same server) and failover (different server)
+- Why `502 Bad Gateway` vs `503 Service Unavailable` vs `504 Gateway Timeout`
+
+---
+
+# ⚖️ SECTION 4 — LOAD BALANCER
+
+---
+
+## ☐ Phase 18 — Load Balancer Backend Pool
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Define `Backend` struct: `address: String`, `weight: u32`, `healthy: AtomicBool`, `active_conns: AtomicUsize`
+- [ ]  Define `BackendPool`: `Arc<RwLock<Vec<Arc<Backend>>>>`
+- [ ]  Implement round-robin: `AtomicUsize` counter, `fetch_add(1, Relaxed) % pool.len()`
+- [ ]  Implement least-connections: iterate pool, return backend with min `active_conns`
+- [ ]  Implement weighted round-robin: expand pool by weight before round-robin select
+- [ ]  Add `BackendPool::add(backend)`, `BackendPool::remove(address)` at runtime
+- [ ]  Write unit tests: 5 backends, 1000 requests, verify even distribution for round-robin
+
+### What you learn
+
+- `AtomicUsize` with `Relaxed` ordering — why full `SeqCst` is unnecessary here
+- `RwLock` vs `Mutex` — multiple concurrent readers vs exclusive writer
+- Weighted round-robin math: weight 3 = appears 3x in expanded pool
+
+---
+
+## ☐ Phase 19 — Load Balancer Health Checks
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Spawn background `tokio` task at startup for health checking
+- [ ]  Every 5 seconds: send `GET /health` to each backend with 2s timeout
+- [ ]  If `2xx` response → set `healthy = true`
+- [ ]  If timeout or error → set `healthy = false`, remove from routing pool
+- [ ]  Re-add backend to pool when it recovers healthy status
+- [ ]  Expose `GET /lb/backends` endpoint: list all backends + health status + active connections
+- [ ]  Integration test: kill a backend process, verify traffic stops within 10 seconds
+
+### What you learn
+
+- Active health checks vs passive (circuit breaker) — complementary not alternatives
+- Why health check timeout must be shorter than request timeout
+- How production LBs like AWS ALB do health checking
+
+---
+
+## ☐ Phase 20 — Load Balancer Sticky Sessions
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Extract session key: `Cookie: session=<id>` or client IP
+- [ ]  Hash key using `FNV-1a` to get consistent backend index
+- [ ]  Store `session → backend_index` in `DashMap<String, usize>` (lock-free concurrent hashmap)
+- [ ]  Expire sessions after 30 minutes using background cleanup task
+- [ ]  Fall back to round-robin if target backend is unhealthy
+- [ ]  Add `sticky_sessions: true` option to config
+- [ ]  Test: 1000 requests from same client IP → 100% go to same backend
+
+### What you learn
+
+- Consistent hashing — why modulo alone breaks when backends change
+- `DashMap` as sharded concurrent hashmap — faster than `Mutex<HashMap>`
+- Sticky session failure modes — what happens when sticky backend dies
+
+---
+
+## ☐ Phase 21 — Load Balancer Connection Draining
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Implement drain mode: stop sending NEW connections to a backend
+- [ ]  Wait for `active_conns` to reach 0 before marking backend fully removed
+- [ ]  Timeout: force-remove after 60s even if connections remain
+- [ ]  Trigger drain via admin API: `POST /lb/backends/:addr/drain`
+- [ ]  Log drain start, in-progress (every 10s), completion with final active_conn count
+
+### What you learn
+
+- Why draining is required for zero-downtime deploys
+- How Kubernetes rolling updates use connection draining
+- The difference between drain (graceful) and kill (abrupt)
+
+---
+
+## ☐ Phase 22 — Load Balancer Benchmarks
+
+**Tag:** `Rust` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Benchmark: `ferrum-lb` in front of 3 Node.js workers vs single Node.js
+- [ ]  Benchmark: `ferrum-lb` vs `http-proxy` npm package
+- [ ]  Measure: req/sec, p99 latency, CPU usage of LB process itself
+- [ ]  Test failover speed: kill one backend mid-benchmark, measure time until traffic redistributes
+- [ ]  Record all results in `crates/load-balancer/BENCHMARKS.md`
+
+### What you learn
+
+- How to measure LB overhead (should be <0.5ms p99)
+- What request distribution actually looks like across backends
+- How to benchmark failover — not just throughput
+
+---
+
+# 🚦 SECTION 5 — RATE LIMITER
+
+---
+
+## ☐ Phase 23 — Rate Limiter Token Bucket Algorithm
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Define `TokenBucket` struct: `tokens: f64`, `capacity: f64`, `refill_rate: f64`, `last_refill: Instant`
+- [ ]  Implement `try_consume(n: f64) -> bool`: refill tokens since `last_refill`, then try to consume `n`
+- [ ]  Refill formula: `tokens = min(capacity, tokens + rate * elapsed_secs)`
+- [ ]  Store one `TokenBucket` per key in `DashMap<String, Mutex<TokenBucket>>`
+- [ ]  Extract client key: `X-API-Key` header → JWT `sub` → IP address (in order)
+- [ ]  Return `429` with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers
+- [ ]  Write property-based tests using `proptest`: no race conditions, never exceeds limit
+
+### What you learn
+
+- Token bucket allows bursting — why this is correct for real API traffic
+- `Instant` over `SystemTime` — monotonic clock, not wall clock
+- Property-based testing: generate thousands of random inputs, verify invariants
+
+---
+
+## ☐ Phase 24 — Rate Limiter Sliding Window Log
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Implement `SlidingWindowLog` struct: `requests: VecDeque<Instant>` per key
+- [ ]  On each request: drain entries older than `window_duration` from front
+- [ ]  If `len() >= max_requests` → reject with `429`
+- [ ]  Else: push `Instant::now()` and allow request
+- [ ]  Expose `window_type: "token_bucket" | "sliding_window"` config option
+- [ ]  Write comparison test: same scenario with both algorithms, verify sliding window is more accurate at boundaries
+
+### What you learn
+
+- Why sliding window is more accurate than fixed window at boundaries
+- Memory tradeoff: sliding window log uses O(requests) per user
+- Why token bucket is preferred at scale despite lower accuracy
+
+---
+
+## ☐ Phase 25 — Rate Limiter Distributed Mode
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Add `redis` crate with async support
+- [ ]  Implement distributed token bucket using Redis `EVALSHA` with Lua script
+- [ ]  Lua script (atomic): check remaining tokens → if enough decrement → return allowed/denied
+- [ ]  Store Lua script SHA on startup using `SCRIPT LOAD`
+- [ ]  Add `redis_url: "redis://localhost:6379"` option to config
+- [ ]  Implement fallback: if Redis unreachable → fall back to in-memory with warning log
+- [ ]  Integration test: 3 rate limiter instances + 1 Redis → verify global limit respected across all
+
+### What you learn
+
+- Why Lua scripts in Redis are atomic — single-threaded Redis execution
+- EVALSHA vs EVAL — why SHA avoids re-sending script on every call
+- CAP theorem applied: distributed rate limiting sacrifices consistency for availability in fallback mode
+
+---
+
+## ☐ Phase 26 — Rate Limiter Multi-Tier Rules
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Support multiple tiers: global limit + per-user limit + per-endpoint limit
+- [ ]  Evaluate all tiers — reject if ANY limit exceeded
+- [ ]  Config example: global 10k/min, user 100/min, `POST /upload` 10/min
+- [ ]  Add IP allowlist: bypass rate limiting for trusted IPs
+- [ ]  Add dynamic rules: admin API `PUT /rate-limits/:key` to change limit at runtime
+- [ ]  Write test: user hits user limit but not global — only user key returns `429`
+
+### What you learn
+
+- Why multi-tier limiting is needed in real APIs (Stripe, GitHub both do this)
+- How to compose multiple independent rate limit checks efficiently
+- Admin plane vs data plane separation
+
+---
+
+# 📬 SECTION 6 — MESSAGE QUEUE
+
+---
+
+## ☐ Phase 27 — Queue Core Data Structures
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Define `Job` struct: `id: Uuid`, `queue: String`, `payload: Vec<u8>`, `status: JobStatus`, `attempts: u32`, `max_attempts: u32`, `created_at: DateTime<Utc>`, `scheduled_at: Option<DateTime<Utc>>`
+- [ ]  Define `JobStatus` enum: `Pending`, `Processing`, `Completed`, `Failed`, `DeadLetter`
+- [ ]  Define `Queue` struct: `pending: VecDeque<Job>`, `processing: HashMap<Uuid, Job>`
+- [ ]  Implement `enqueue(job)`: push to back of `pending`
+- [ ]  Implement `dequeue() -> Option<Job>`: pop from front, move to `processing`
+- [ ]  Implement `ack(id)`: remove from `processing`, mark `Completed`
+- [ ]  Implement `nack(id, reason)`: increment `attempts`, re-enqueue or move to dead letter if `attempts >= max_attempts`
+- [ ]  Write 30 unit tests — every edge case including dead letter promotion
+
+### What you learn
+
+- VecDeque as O(1) double-ended queue — push back, pop front
+- Why queues need explicit acknowledgement — at-least-once delivery guarantee
+- Dead letter queues: where failed jobs go for human inspection
+
+---
+
+## ☐ Phase 28 — Queue WAL Persistence
+
+**Tag:** `Rust` · **Estimated time:** 4 days
+
+### What to implement
+
+- [ ]  Design WAL binary format: `[4-byte length][N-byte serialized event]` per record
+- [ ]  Define `WalEvent` enum: `Enqueue(Job)`, `Dequeue(Uuid)`, `Ack(Uuid)`, `Nack(Uuid, String)`
+- [ ]  On every state change: serialize event with `bincode` and append to `wal.log`
+- [ ]  On startup: open `wal.log`, replay all events from beginning to rebuild in-memory state
+- [ ]  Implement WAL rotation: when file exceeds 100MB → create `wal.001.log`, compact old segment
+- [ ]  Compaction: write current state snapshot → delete old segments
+- [ ]  Crash test: `kill -9` the process mid-enqueue, restart, verify zero jobs lost
+
+### What you learn
+
+- How PostgreSQL and SQLite use WAL for durability
+- Why append-only writes are faster than random writes (no seek)
+- How Kafka uses log segments — same pattern
+
+---
+
+## ☐ Phase 29 — Queue WebSocket API
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Add `tokio-tungstenite` for WebSocket server support
+- [ ]  Listen on configurable port (default 6380)
+- [ ]  Define JSON protocol: `{ "op": "enqueue", "queue": "emails", "payload": {...} }`
+- [ ]  Implement all ops: `enqueue`, `dequeue`, `ack`, `nack`, `subscribe`, `stats`
+- [ ]  `subscribe` op: push new jobs to subscriber in real-time as they arrive
+- [ ]  Write Node.js client `Queue` class in `js-sdk`: `enqueue()`, `process()`, `createWorker()`
+- [ ]  Add reconnection with exponential backoff in Node.js client
+- [ ]  Integration test: Node.js enqueues 10,000 jobs, 5 workers consume all — verify 0 lost, 0 duplicates
+
+### What you learn
+
+- WebSocket as a bidirectional RPC protocol
+- Why subscribe/push is more efficient than polling for queue workers
+- Exponential backoff with jitter for WebSocket reconnection
+
+---
+
+## ☐ Phase 30 — Queue Delayed Jobs & Cron
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Add `scheduled_at: Option<DateTime<Utc>>` to `Job`
+- [ ]  Maintain `BinaryHeap<(Reverse<DateTime<Utc>>, Job)>` — min-heap by schedule time
+- [ ]  Background task: every 100ms poll heap top, move ready jobs to `pending` VecDeque
+- [ ]  Add `cron` crate for cron expression parsing
+- [ ]  Implement recurring job: `queue.cron("0 9 * * 1-5", payload)` — runs every weekday at 9am
+- [ ]  Expose from JS SDK: `queue.schedule(payload, runAt)` and `queue.cron(expr, payload)`
+- [ ]  Test: schedule job 5 seconds in future, measure actual execution time — must be within 200ms
+
+### What you learn
+
+- Binary heap as priority queue — O(log n) insert, O(1) peek min element
+- Cron expression format: minute hour day month weekday
+- Why polling interval (100ms) creates a tradeoff between precision and CPU usage
+
+---
+
+## ☐ Phase 31 — Queue Concurrency & Worker Pools
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Implement `concurrency: N` option — only N jobs processing simultaneously per queue
+- [ ]  Use `tokio::sync::Semaphore` to enforce concurrency limit
+- [ ]  Implement worker heartbeat: processing job must send heartbeat every 30s or job returns to pending
+- [ ]  Implement job timeout: if no heartbeat after 60s, auto-nack the job
+- [ ]  Expose `GET /queues/:name/stats` — pending count, processing count, failed count, throughput/sec
+
+### What you learn
+
+- `Semaphore` as a token pool for concurrency control
+- Worker heartbeat pattern — prevents stuck jobs from blocking the queue forever
+- Why queue stats matter: pending backlog is the key metric to monitor
+
+---
+
+# ⚡ SECTION 7 — CIRCUIT BREAKER
+
+---
+
+## ☐ Phase 32 — Circuit Breaker State Machine
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Implement 3-state machine: `Closed` (normal) → `Open` (failing) → `HalfOpen` (testing recovery)
+- [ ]  State stored in `Arc<Mutex<CircuitState>>`
+- [ ]  `Closed` → `Open`: when failure count exceeds threshold in rolling window
+- [ ]  `Open` → `HalfOpen`: after `reset_timeout` (e.g. 30s) has elapsed
+- [ ]  `HalfOpen` → `Closed`: if probe request succeeds
+- [ ]  `HalfOpen` → `Open`: if probe request fails
+- [ ]  In `Open` state: return `CircuitBreakerError` immediately without calling downstream
+- [ ]  Write test: simulate 10 failures → verify circuit opens → wait 30s → verify half-open probe
+
+### What you learn
+
+- Circuit breaker pattern — prevents cascade failures in distributed systems
+- Why HalfOpen is critical — avoids oscillating between Open and Closed
+- How Netflix Hystrix implements this (Ferrum is the Rust equivalent)
+
+---
+
+## ☐ Phase 33 — Circuit Breaker Rolling Window Metrics
+
+**Tag:** `Rust` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Implement rolling window using circular buffer: last N requests (default 100)
+- [ ]  Track per-bucket: success count, failure count, timeout count
+- [ ]  Calculate failure rate: `(failures + timeouts) / total * 100`
+- [ ]  Open circuit when: failure rate > threshold% AND minimum requests met
+- [ ]  Add `failure_rate_threshold: 50.0` and `minimum_requests: 20` to config
+- [ ]  Expose metrics: `GET /circuit/:name/status` — state, failure rate, request counts
+
+### What you learn
+
+- Circular buffer for O(1) rolling window — no Vec shifting
+- Why minimum_requests guard is essential — prevents tripping on 1/1 = 100% failure rate
+- How Hystrix computes its rolling window metrics
+
+---
+
+# 🔁 SECTION 8 — REVERSE PROXY
+
+---
+
+## ☐ Phase 34 — Reverse Proxy Core
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Implement routing rules: `location /api/ → upstream http://localhost:4000`
+- [ ]  Implement static file serving: `location /static/ → dir /var/www/static`
+- [ ]  Implement WebSocket proxying: `location /ws/ → upstream ws://localhost:4001`
+- [ ]  Forward all headers except hop-by-hop (`Connection`, `Transfer-Encoding`, `Upgrade`)
+- [ ]  Add `Via: ferrum/1.0` header to proxied requests
+- [ ]  Support multiple upstream locations with priority order matching
+- [ ]  Config: `ferrum-proxy.yaml` with same hot-reload mechanism as gateway
+
+### What you learn
+
+- Why hop-by-hop headers must be stripped at each proxy hop
+- The difference between a reverse proxy and a gateway (proxy is transparent, gateway transforms)
+- How Nginx `location` blocks work — longest prefix match
+
+---
+
+## ☐ Phase 35 — Reverse Proxy Caching Layer
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Implement in-memory response cache using `moka` crate (concurrent LRU)
+- [ ]  Cache key: `method + path + relevant headers` → SHA-256 hash
+- [ ]  Cache only `GET` and `HEAD` requests with `2xx` responses
+- [ ]  Respect `Cache-Control` headers: `no-cache`, `max-age`, `no-store`
+- [ ]  Add `Age` header to cached responses
+- [ ]  Implement cache invalidation: `POST /proxy/cache/invalidate?path=/api/users`
+- [ ]  Measure cache hit rate in metrics
+
+### What you learn
+
+- HTTP caching semantics — `Cache-Control` vs `Expires` vs `ETag`
+- LRU eviction policy — least recently used item removed when at capacity
+- Why cache key design is critical — too broad = stale data, too narrow = no cache hits
+
+---
+
+# 📊 SECTION 9 — OBSERVABILITY AGENT
+
+---
+
+## ☐ Phase 36 — Metrics Collection
+
+**Tag:** `Rust` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Define metrics: `request_count`, `request_duration_ms`, `error_count`, `active_connections`, `queue_depth`, `cache_hit_rate`
+- [ ]  Use `metrics` crate with `metrics-exporter-prometheus` for Prometheus format
+- [ ]  Expose `GET /metrics` in Prometheus text format
+- [ ]  Add histogram for request duration with buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1000ms
+- [ ]  Instrument every Ferrum component to emit metrics via `metrics::counter!` and `metrics::histogram!`
+- [ ]  Verify with `curl localhost:9090/metrics` → Prometheus format output
+
+### What you learn
+
+- Counter vs Gauge vs Histogram — when to use each metric type
+- Prometheus text format — how Grafana scrapes and visualizes
+- Why histograms need pre-defined buckets — percentile estimation tradeoff
+
+---
+
+## ☐ Phase 37 — Real-Time Dashboard
+
+**Tag:** `Rust + React` · **Estimated time:** 4 days
+
+### What to implement
+
+- [ ]  Implement SSE (Server-Sent Events) endpoint: `GET /metrics/stream`
+- [ ]  Push metrics snapshot every 1 second as JSON over SSE
+- [ ]  Build Next.js dashboard in `packages/dashboard/`
+- [ ]  Display: req/sec gauge, p99 latency chart (60s rolling), error rate, active connections
+- [ ]  Display per-component health: HTTP server, gateway, LB, queue, circuit breakers
+- [ ]  Auto-reconnect SSE on disconnect
+- [ ]  Use `recharts` for time-series charts
+
+### What you learn
+
+- SSE vs WebSocket — SSE is one-directional, simpler, auto-reconnects
+- How Grafana works — Ferrum dashboard is a simplified version
+- Real-time chart rendering without performance issues using windowed data
+
+---
+
+# 🔌 SECTION 10 — JS SDK & NODE.JS BRIDGE
+
+---
+
+## ☐ Phase 38 — napi-rs Rust ↔ Node.js Bridge
+
+**Tag:** `Rust + JS` · **Estimated time:** 4 days
+
+### What to implement
+
+- [ ]  Add `napi = { version = "2", features = ["async"] }` to each crate
+- [ ]  Add `napi-build` to `build.rs` for each crate
+- [ ]  Expose `#[napi]` functions for HTTP server: `createServer`, `listen`, `close`
+- [ ]  Expose `#[napi]` functions for rate limiter: `createLimiter`, `checkLimit`
+- [ ]  Expose `#[napi]` classes for queue: `Queue`, `Worker`
+- [ ]  Handle Rust `Result<T, E>` → JS `Promise<T>` rejection automatically
+- [ ]  Test from Node.js: `const { createServer } = require("@ferrum/http-server")`
+- [ ]  Verify all async Rust functions return proper JS Promises
+
+### What you learn
+
+- How napi-rs bridges Rust and V8 engine — N-API ABI
+- Why N-API is stable across Node.js versions (unlike nan)
+- How esbuild ships its Go binary to Node.js — same pattern you're using
+
+---
+
+## ☐ Phase 39 — JS SDK Design & API
+
+**Tag:** `JS` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Design clean JS API for each component — prioritize developer experience
+- [ ]  HTTP server: `const app = ferrum.createApp(); app.get('/path', handler); app.listen(3000)`
+- [ ]  Gateway: `const gw = ferrum.gateway({ upstream: 'http://app:4000', plugins: [...] })`
+- [ ]  Rate limiter: `const limiter = ferrum.rateLimit({ max: 100, window: '1m' })`
+- [ ]  Queue: `const q = ferrum.queue('emails'); q.process(async job => { ... })`
+- [ ]  Write TypeScript type definitions `.d.ts` for every export
+- [ ]  Write JSDoc comments for every public function
+- [ ]  Write 20 integration tests in Node.js using `node:test`
+
+### What you learn
+
+- API design principles — fluent interface vs config object
+- TypeScript declaration files — how `@types/node` is structured
+- Why JSDoc matters for DX (IDE autocomplete for users of your library)
+
+---
+
+## ☐ Phase 40 — SDK Error Handling & Logging
+
+**Tag:** `JS` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Map all Rust `FerrumError` variants to typed JS Error subclasses
+- [ ]  `FerrumConnectionError`, `FerrumTimeoutError`, `FerrumRateLimitError` etc.
+- [ ]  Add `code` property to every error for programmatic handling
+- [ ]  Integrate with Node.js `debug` module: `DEBUG=ferrum:* node app.js`
+- [ ]  Emit Node.js `EventEmitter` events: `'error'`, `'connect'`, `'disconnect'`
+- [ ]  Write test: every error path throws correct typed error with correct `code`
+
+### What you learn
+
+- Error subclassing in JS — `class FerrumError extends Error`
+- Why error `code` properties matter — allows `if (err.code === 'RATE_LIMITED')`
+- Node.js debug module internals — environment-variable controlled logging
+
+---
+
+# 📦 SECTION 11 — PUBLISHING
+
+---
+
+## ☐ Phase 41 — npm Binary Package Structure
+
+**Tag:** `Infra` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Create `packages/@ferrum/http-server-linux-x64/package.json` — `"bin"` points to binary
+- [ ]  Create same for: `darwin-x64`, `darwin-arm64`, `win32-x64`
+- [ ]  Create `packages/@ferrum/http-server/package.json` with `optionalDependencies` for all 4
+- [ ]  Write `packages/@ferrum/http-server/scripts/install.js` — detect platform, locate binary
+- [ ]  Write `packages/@ferrum/http-server/index.js` — load binary, export JS API
+- [ ]  Test locally: `npm pack && npm install ./<tarball>` → verify binary runs
+- [ ]  Repeat structure for every Ferrum component crate
+
+### What you learn
+
+- npm `optionalDependencies` — npm installs only matching platform package
+- `process.platform` + `process.arch` for platform detection
+- How Biome, Turbo, and esbuild do exactly this
+
+---
+
+## ☐ Phase 42 — GitHub Actions Cross-Compilation
+
+**Tag:** `Infra` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Create `.github/workflows/release.yml` — triggered on `git tag v*`
+- [ ]  Matrix strategy: `os: [ubuntu-latest, macos-latest, windows-latest]`
+- [ ]  Install Rust targets: `rustup target add aarch64-apple-darwin` on macOS
+- [ ]  Install `cross` crate for Linux ARM64 cross-compilation via Docker
+- [ ]  Build command per target: `cargo build --release --target <triple>`
+- [ ]  Strip debug symbols: `strip target/<triple>/release/ferrum-gateway` on Linux/macOS
+- [ ]  Upload binaries as GitHub Release assets
+- [ ]  Add second job: publish npm packages using `npm publish --access public` with `NPM_TOKEN` secret
+
+### What you learn
+
+- GitHub Actions matrix builds — fan-out then collect
+- Cross-compilation toolchains — target triples explained
+- Why stripping debug symbols saves 60-80% binary size
+
+---
+
+## ☐ Phase 43 — Automated Versioning & Changelog
+
+**Tag:** `Infra` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Enforce conventional commits with `commitlint` GitHub Action on every PR
+- [ ]  Add `release-please` GitHub Action — auto-bumps semver from commit types
+- [ ]  Configure: all crates version together as one workspace version
+- [ ]  Auto-generate `CHANGELOG.md` from `feat:` and `fix:` commits
+- [ ]  Write `RELEASING.md` — step by step how to cut a release
+- [ ]  Test: push a `feat:` commit → verify `release-please` opens PR with version bump
+
+### What you learn
+
+- Semantic versioning rules: `feat:` → minor bump, `fix:` → patch, `BREAKING CHANGE:` → major
+- Conventional commits spec — used by Vue, Angular, Electron
+- Why automated releases reduce human error in version management
+
+---
+
+# 📚 SECTION 12 — DOCUMENTATION
+
+---
+
+## ☐ Phase 44 — API Documentation
+
+**Tag:** `Docs` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Setup Docusaurus in `docs/` with custom Ferrum theme
+- [ ]  Write Getting Started guide: install → hello world in under 5 minutes
+- [ ]  Write API reference for every package: every config option, every method, return type
+- [ ]  Write migration guide: "Coming from Express" — side-by-side comparison
+- [ ]  Add runnable code examples (not just snippets) — verify each one actually works
+- [ ]  Add troubleshooting section: most common errors and their solutions
+
+### What you learn
+
+- Documentation-driven development — write docs before finalizing API
+- Why "Getting Started in 5 minutes" is the most important page
+- Docusaurus MDX — mixing Markdown with React components
+
+---
+
+---
+
+## ☐ Phase 45 — Architecture Documentation
+
+**Tag:** `Docs` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Write Architecture Overview: how all components fit together
+- [ ]  Write deep-dive for each component: design decisions, tradeoffs, internals
+- [ ]  Add diagrams: request flow, data flow, deployment topology
+- [ ]  Document the FFI bridge: how Rust talks to Node.js via napi-rs
+- [ ]  Document WAL format: byte-level description of the binary format
+- [ ]  Write ADR (Architecture Decision Records) for major choices: "Why Rust not Go for HTTP server"
+
+### What you learn
+
+- How to write architecture docs that engineers actually read
+- ADR format — how successful open source projects document decisions
+- Mermaid diagrams in Markdown — renders on GitHub automatically
+
+---
+
+## ☐ Phase 46 — Benchmarks Page
+
+**Tag:** `Docs` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Create `docs/benchmarks.md` with all benchmark results from all phases
+- [ ]  Include test methodology: machine spec, OS, Node.js version, Rust version, wrk version
+- [ ]  Include comparison tables: Ferrum vs competitors for each component
+- [ ]  Include reproducibility instructions: how to run benchmarks yourself
+- [ ]  Add charts using Docusaurus chart plugin
+- [ ]  Write honest caveats: what benchmarks do and don't measure
+
+### What you learn
+
+- How to write credible benchmark claims — what to include for credibility
+- Why methodology section matters — prevents "benchmark shopping" accusations
+- Honest engineering — documenting where competitors are better
+
+---
+
+## ☐ Phase 47 — GitHub Repository Polish
+
+**Tag:** `Docs` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Write compelling root `README.md`: logo, tagline, quick install, quick example, benchmark teaser
+- [ ]  Add GitHub badges: CI status, npm version, license, downloads/week
+- [ ]  Add `SECURITY.md`: how to report vulnerabilities
+- [ ]  Add issue templates: bug report, feature request, question
+- [ ]  Add PR template: checklist for contributors
+- [ ]  Add `CODE_OF_CONDUCT.md`
+- [ ]  Pin good first issues for community contributors
+
+### What you learn
+
+- Why README is your project's landing page — it's the first impression
+- GitHub community standards — what makes a project look maintained
+- How to attract contributors — good first issues lower the barrier
+
+---
+
+# 🧪 SECTION 13 — TESTING & BENCHMARKING
+
+---
+
+## ☐ Phase 48 — Unit Test Coverage
+
+**Tag:** `Test` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Add `cargo-llvm-cov` for code coverage measurement
+- [ ]  Achieve minimum 80% line coverage on every crate
+- [ ]  Write property-based tests with `proptest` for: rate limiter, queue, load balancer algorithms
+- [ ]  Write fuzz tests with `cargo-fuzz` for: HTTP parser, WAL parser
+- [ ]  Add `cargo test --workspace` to CI — fail build on any test failure
+- [ ]  Add `cargo clippy --workspace -- -D warnings` to CI — fail build on any warning
+
+### What you learn
+
+- Code coverage — what it measures and what it misses
+- Property-based testing — generates thousands of inputs automatically
+- Fuzz testing — sends malformed inputs to find crashes and panics
+
+---
+
+## ☐ Phase 49 — Integration Test Harness
+
+**Tag:** `Test` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Create `tests/` folder at monorepo root
+- [ ]  Write `docker-compose.yml`: starts all Ferrum components + test Node.js app
+- [ ]  Write integration test runner using `vitest` in Node.js
+- [ ]  Test 1: full request flow — client → HTTP server → gateway → LB → Node.js → back
+- [ ]  Test 2: rate limiter blocks after configured limit
+- [ ]  Test 3: load balancer health check — kill backend, verify traffic stops within 10s
+- [ ]  Test 4: queue — enqueue 1000 jobs, kill process mid-flight, restart, verify all processed
+- [ ]  Test 5: circuit breaker opens after 10 failures, closes after successful probe
+
+### What you learn
+
+- Integration testing distributed systems — why unit tests aren't enough
+- Docker Compose for reproducible test infrastructure
+- Testing failure modes — not just happy path
+
+---
+
+## ☐ Phase 50 — End-to-End Load Test Without Ferrum
+
+**Tag:** `Test` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Deploy your own real Node.js app (your existing project) to a VPS or Docker
+- [ ]  Write k6 load test script: ramp 0→100 VUs over 60s, sustain 5 minutes, ramp down
+- [ ]  Record: p50, p95, p99 latency, req/sec, error rate, CPU%, memory RSS
+- [ ]  Test 2: spike test — instantly hit 500 VU, observe behavior under shock load
+- [ ]  Test 3: soak test — 50 VU for 1 hour — check for memory leaks
+- [ ]  Save all raw results to `results/baseline/`
+
+### What you learn
+
+- k6 scripting: stages, thresholds, custom metrics
+- Ramp vs spike vs soak tests — what each reveals
+- How to spot a memory leak from a soak test graph
+
+---
+
+## ☐ Phase 51 — End-to-End Load Test With Ferrum
+
+**Tag:** `Test` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Add Ferrum components in front of same app: HTTP server + gateway + LB (3 workers) + rate limiter
+- [ ]  Run identical k6 tests from Phase 50
+- [ ]  Record same metrics
+- [ ]  Verify rate limiter activates at configured threshold under spike test
+- [ ]  Verify LB distributes load evenly across 3 Node.js workers
+- [ ]  Verify no memory leak over 1-hour soak test in Ferrum processes
+
+### What you learn
+
+- How to attribute latency changes correctly
+- Why adding a proxy layer can reduce p99 latency (connection pooling effect)
+- What infrastructure overhead actually costs in numbers
+
+---
+
+## ☐ Phase 52 — Chaos Engineering
+
+**Tag:** `Test` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Kill one LB backend randomly mid-test — verify traffic redistributes
+- [ ]  Kill Redis mid-test — verify rate limiter falls back to in-memory
+- [ ]  Corrupt WAL file — verify queue detects corruption and recovers to last valid state
+- [ ]  Introduce 500ms artificial latency to upstream — verify circuit breaker eventually opens
+- [ ]  Fill disk on queue host — verify graceful error, no panic, WAL write fails cleanly
+- [ ]  Document each chaos scenario: what happened, how Ferrum responded
+
+### What you learn
+
+- Chaos engineering principles: Game Days, failure injection
+- The difference between fault tolerance and fault recovery
+- How Netflix Chaos Monkey works conceptually
+
+---
+
+## ☐ Phase 53 — Security Audit
+
+**Tag:** `Test` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Run `cargo audit` — check all dependencies for known CVEs
+- [ ]  Run `cargo deny` — enforce license compatibility and ban list
+- [ ]  Test HTTP parser with malformed inputs: oversized headers, null bytes, HTTP request smuggling attempts
+- [ ]  Test rate limiter bypass attempts: IP spoofing via X-Forwarded-For header
+- [ ]  Test JWT plugin: algorithm confusion attack (HS256 vs RS256), none algorithm
+- [ ]  Test queue: payload injection in job ID field
+- [ ]  Document all findings and fixes
+
+### What you learn
+
+- HTTP request smuggling — one of the most dangerous HTTP vulnerabilities
+- JWT algorithm confusion attacks — real CVEs in production systems
+- Why `cargo audit` must be in CI — dependencies get CVEs after you ship
+
+---
+
+## ☐ Phase 54 — Performance Profiling & Optimization
+
+**Tag:** `Test` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Generate flamegraph for HTTP server under load: `cargo flamegraph -- --bench`
+- [ ]  Identify top 3 CPU hotspots from flamegraph
+- [ ]  Optimize hotspot 1: likely string allocations in header parsing → use `&str` slices
+- [ ]  Optimize hotspot 2: likely `HashMap` rehashing → pre-size with capacity hint
+- [ ]  Optimize hotspot 3: likely lock contention → replace `Mutex` with `DashMap`
+- [ ]  Re-benchmark after each optimization — verify improvement, document result
+
+### What you learn
+
+- Flamegraph reading: wide = expensive, tall = deep call stack
+- Zero-copy string handling in Rust — `&str` vs `String`
+- When to pre-size data structures — avoiding incremental reallocation
+
+## ☐ Phase 55 — Final Component Integration Test
+
+**Tag:** `Test` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Run ALL components together: HTTP server + gateway + LB + rate limiter + queue + circuit breaker + proxy + observability
+- [ ]  Run k6 against the full stack — 200 VU sustained 10 minutes
+- [ ]  Verify dashboard shows live metrics during test
+- [ ]  Verify all components visible and healthy in observability dashboard
+- [ ]  Take screenshots of dashboard for README and documentation
+
+### What you learn
+
+- System integration testing — emergent behaviors that unit tests miss
+- How distributed systems behave differently under combined load vs isolated load
+- Operational readiness — can you actually monitor and debug this in production
+
+---
+
+# 🔬 SECTION 14 — FINAL BENCHMARKING
+
+---
+
+## ☐ Phase 56 — Baseline Measurement: Pure Node.js App
+
+**Tag:** `Test` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Deploy test Node.js app: Express + BullMQ + express-rate-limit + http-proxy + redis
+- [ ]  Document exact versions of every package used
+- [ ]  Run k6: 100 VU, 5 minutes sustained
+- [ ]  Record: p50/p95/p99 latency, req/sec, error rate, Node.js process memory, Redis memory
+- [ ]  Record: startup time, binary size on disk
+- [ ]  Save to `results/phase-56-baseline.json`
+
+---
+
+## ☐ Phase 57 — Measurement: With Ferrum HTTP Server Only
+
+**Tag:** `Test` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Replace `express` with `@ferrum/http-server` — keep rest identical
+- [ ]  Run identical k6 test
+- [ ]  Record same metrics
+- [ ]  Compare: latency delta, memory delta, req/sec delta
+- [ ]  Save to `results/phase-57-ferrum-http.json`
+
+---
+
+## ☐ Phase 58 — Measurement: With Full Ferrum Stack
+
+**Tag:** `Test` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Replace ALL components: `@ferrum/http-server` + `@ferrum/gateway` + `@ferrum/lb` (3 workers) + `@ferrum/rate-limiter` + `@ferrum/queue`
+- [ ]  Run identical k6 test
+- [ ]  Record same metrics
+- [ ]  Compare to Phase 56 baseline
+
+---
+
+## ☐ Phase 59 — Spike & Soak Tests: Before vs After
+
+**Tag:** `Test` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Spike test: 0 → 1000 VU instantly — run for both baseline and full Ferrum stack
+- [ ]  Soak test: 50 VU for 2 hours — run for both
+- [ ]  Record: at what VU count does each stack start returning errors
+- [ ]  Record: memory growth over 2 hours (soak) — is there a leak?
+- [ ]  Save all results
+
+---
+
+## ☐ Phase 60 — Comparison Report: Node.js vs Ferrum
+
+**Tag:** `Test` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Write `results/FINAL-REPORT.md` — full before vs after comparison
+- [ ]  Include: methodology, test environment, test scripts used
+- [ ]  Include: summary table of all metrics across all phases
+- [ ]  Include: latency distribution charts (histogram comparison)
+- [ ]  Include: memory usage over time chart (soak test comparison)
+- [ ]  Include: honest analysis — where Ferrum wins, where tradeoffs exist
+- [ ]  Write 1-page executive summary for resume / portfolio
+
+### What you learn
+
+- How to write a technical report that engineers and hiring managers read
+- Honest engineering: documenting tradeoffs alongside wins
+- Why the before/after comparison IS the project — it proves real-world value
+
+---
+
+## ☐ Phase 61 — Real App Integration Blog Post
+
+**Tag:** `Docs` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Write a technical blog post: "I replaced Node.js infrastructure with Rust and here's what happened"
+- [ ]  Include: motivation, architecture decision, implementation challenges
+- [ ]  Include: actual benchmark numbers from Phases 56-60
+- [ ]  Include: code snippets showing the before/after API
+- [ ]  Include: lessons learned — what was harder than expected
+- [ ]  Publish on: dev.to, Hashnode, or personal blog
+- [ ]  Share on: Twitter/X, Reddit r/rust, r/node, Hacker News
+
+### What you learn
+
+- Technical writing — how to explain systems decisions to a broad audience
+- Why writing publicly accelerates your career
+- How open source projects build community through content
+
+---
+
+## ☐ Phase 62 — Open Source Community Setup
+
+**Tag:** `Infra` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Create Discord server for Ferrum community
+- [ ]  Add Discord badge and link to README
+- [ ]  Write first GitHub Discussion: "Roadmap and feedback request"
+- [ ]  Tag 10 issues as `good first issue` with detailed description
+- [ ]  Respond to first 10 GitHub issues within 24 hours
+- [ ]  Add `CHANGELOG.md` entry for v0.1.0 public release
+
+### What you learn
+
+- How open source communities form and grow
+- Why responsiveness in first weeks determines long-term traction
+- How to convert GitHub stars into contributors
+
+---
+
+## ☐ Phase 63 — v0.1.0 Public Release
+
+**Tag:** `Infra` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Push git tag `v0.1.0`
+- [ ]  Verify GitHub Actions cross-compilation completes for all platforms
+- [ ]  Verify all npm packages published to registry
+- [ ]  Verify docs site deployed and accessible
+- [ ]  Post release announcement on community channels
+- [ ]  Submit to: Awesome Rust list, Awesome Node.js list
+
+---
+
+## ☐ Phase 64 — Portfolio & Resume Update
+
+**Tag:** `Career` · **Estimated time:** 1 day
+
+### What to implement
+
+- [ ]  Update resume: "Built Ferrum — open source Rust infrastructure toolkit for Node.js. Published on npm. X GitHub stars."
+- [ ]  Add Ferrum to portfolio website with architecture diagram and benchmark numbers
+- [ ]  Write 3 interview talking points for each component — practice out loud
+- [ ]  Prepare system design answer: "Design a rate limiter" using your actual implementation
+- [ ]  Prepare system design answer: "Design a load balancer" using your actual implementation
+- [ ]  Prepare behavioral answer: "Tell me about a challenging technical problem" — use WAL + crash recovery
+
+---
+
+## ☐ Phase 65 — Interview Preparation
+
+**Tag:** `Career` · **Estimated time:** 3 days
+
+### What to implement
+
+- [ ]  Practice: explain the token bucket algorithm on a whiteboard in under 5 minutes
+- [ ]  Practice: explain WAL persistence — draw the byte format, explain replay on startup
+- [ ]  Practice: explain your load balancer — least-connections algorithm, health checks
+- [ ]  Practice: explain Rust ownership — why it matters for infrastructure code
+- [ ]  Practice: explain napi-rs bridge — how Rust calls happen from Node.js
+- [ ]  Mock interview: have someone ask "why Rust over Go?" — answer cold
+
+---
+
+## ☐ Phase 66 — Post-Launch: Issue Triage
+
+**Tag:** `Infra` · **Estimated time:** Ongoing
+
+### What to implement
+
+- [ ]  Set up GitHub issue labels: `bug`, `enhancement`, `performance`, `docs`, `good first issue`
+- [ ]  Triage every new issue within 48 hours
+- [ ]  Fix first bug reported by community within 1 week — publish patch release
+- [ ]  Review and merge first external PR
+- [ ]  Track: star count, npm weekly downloads, GitHub issues opened/closed
+
+---
+
+## ☐ Phase 67 — v0.2.0: Community-Requested Features
+
+**Tag:** `Rust` · **Estimated time:** 2 weeks
+
+### What to implement
+
+- [ ]  Prioritize top 5 GitHub issues by thumbs-up reaction
+- [ ]  Implement top feature request
+- [ ]  Write migration guide from v0.1.0 to v0.2.0
+- [ ]  Add test coverage for new features
+- [ ]  Publish v0.2.0
+
+---
+
+## ☐ Phase 68 — HTTP/2 Support
+
+**Tag:** `Rust` · **Estimated time:** 1 week
+
+### What to implement
+
+- [ ]  Add `h2` crate for HTTP/2 server support
+- [ ]  Support multiplexed streams — multiple requests on one TCP connection
+- [ ]  Support server push
+- [ ]  Benchmark HTTP/2 vs HTTP/1.1 keep-alive — measure throughput improvement
+- [ ]  Update docs with HTTP/2 configuration
+
+### What you learn
+
+- HTTP/2 binary framing vs HTTP/1.1 text protocol
+- Stream multiplexing — how HTTP/2 eliminates head-of-line blocking
+- HPACK header compression — why HTTP/2 headers are smaller
+
+---
+
+## ☐ Phase 69 — gRPC Gateway Support
+
+**Tag:** `Rust` · **Estimated time:** 1 week
+
+### What to implement
+
+- [ ]  Add `tonic` crate for gRPC server support
+- [ ]  Implement HTTP/JSON → gRPC transcoding in the gateway plugin
+- [ ]  Allow REST clients to call gRPC backends through Ferrum gateway
+- [ ]  Generate Protobuf definitions for Ferrum's own inter-component protocol
+- [ ]  Benchmark gRPC vs REST for inter-service communication
+
+### What you learn
+
+- gRPC protocol: Protobuf over HTTP/2
+- Transcoding: why REST-to-gRPC bridges exist (browser can't speak gRPC natively)
+- Why gRPC is faster than REST for internal microservice communication
+
+---
+
+## ☐ Phase 70 — Final: The Before vs After Report
+
+**Tag:** `Career` · **Estimated time:** 2 days
+
+### What to implement
+
+- [ ]  Compile every benchmark result from Phases 50–69 into one document
+- [ ]  Create a 1-slide summary: "Ferrum reduced p99 latency from Xms to Yms and memory from XMB to YMB"
+- [ ]  Record a 5-minute demo video: install Ferrum on a fresh Node.js app, run load test, show dashboard
+- [ ]  Upload demo to YouTube — link from README
+- [ ]  Write final LinkedIn post: what you built, what you learned, what it does
+- [ ]  Open source the benchmark scripts so anyone can reproduce your results
+
+### What you learn
+
+- How to communicate engineering impact in numbers
+- Why reproducibility is the mark of serious engineering work
+- How to turn 6 months of work into a career-defining project
+
+## 📊 Summary
+
+| Section | Phases | Components | Estimated Time |
+| --- | --- | --- | --- |
+| Foundation | 0–4 | Rust fundamentals | 2 weeks |
+| HTTP Server | 5–11 | Full HTTP/1.1 + WS + TLS | 3 weeks |
+| API Gateway | 12–17 | Auth, transform, retry | 3 weeks |
+| Load Balancer | 18–22 | Pool, health, sticky | 2 weeks |
+| Rate Limiter | 23–26 | Token bucket, distributed | 2 weeks |
+| Message Queue | 27–31 | WAL, delayed, workers | 3 weeks |
+| Circuit Breaker | 32–33 | State machine, metrics | 1 week |
+| Reverse Proxy | 34–35 | Routing, caching | 1 week |
+| Observability | 36–37 | Metrics, dashboard | 1 week |
+| JS SDK | 38–40 | napi-rs, TypeScript | 2 weeks |
+| Publishing | 41–47 | npm, CI, docs | 2 weeks |
+| Testing | 48–55 | Unit, integration, chaos | 3 weeks |
+| Benchmarking | 56–65 | Before/after, portfolio | 2 weeks |
+| Post-Launch | 66–70 | Community, HTTP/2, gRPC | Ongoing |
+
+---
+
+> **You are a senior backend engineer building production infrastructure. Every phase ships something real. Every phase teaches something deep. By Phase 70 you have a published open source library, a before/after benchmark, and enough depth to answer any systems design question in any interview.**
+>
