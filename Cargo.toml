@@ -2,14 +2,14 @@
 resolver = "2"
 
 members = [
-    "crates/http-server",
+    "crates/pulsar-server",
     "crates/gateway",
     "crates/load-balancer",
     "crates/rate-limiter",
     "crates/queue",
     "crates/circuit-breaker",
     "crates/proxy",
-    "crates/observability", "crates/fundamentals",
+    "crates/observability", "crates/fundamentals", "crates/tokio-deep-dive",
 ]
 
 [workspace.package]
@@ -48,4 +48,5 @@ dotenvy = "0.15"
 # Utils
 uuid = { version = "1.8", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+
 

@@ -1,5 +1,5 @@
 [package]
-name = "http-server"
+name = "pulsar-server"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
