@@ -1,4 +1,4 @@
-# 🔩 Ferrum — Complete 70-Phase Production Roadmap
+# 🔩 pulsar — Complete 70-Phase Production Roadmap
 
 > Rust-powered infrastructure for Node.js · Zero dependencies · 10x faster
 **Role:** Senior Backend Engineer · **Timeline:** ~6 months · **Goal:** Build + Ship to npm
@@ -37,7 +37,7 @@
 
 ### What to implement
 
-- [ ]  Create GitHub repo: `ferrum` with MIT license and root README.md
+- [ ]  Create GitHub repo: `pulsar` with MIT license and root README.md
 - [ ]  Create `Cargo.toml` at root with `[workspace]` and `members = ["crates/*"]`
 - [ ]  Create `crates/` folder with sub-crates: `http-server`, `gateway`, `load-balancer`, `rate-limiter`, `queue`, `circuit-breaker`, `proxy`, `observability`
 - [ ]  Create `packages/` folder: `js-sdk` (Node.js), `dashboard` (Next.js)
@@ -136,8 +136,8 @@
 ### What to implement
 
 - [ ]  Replace all `unwrap()` calls with proper `?` operator and `Result<T, E>` returns
-- [ ]  Define custom error enum `FerrumError` with variants for each failure mode
-- [ ]  Implement `std::fmt::Display` for `FerrumError`
+- [ ]  Define custom error enum `pulsarError` with variants for each failure mode
+- [ ]  Implement `std::fmt::Display` for `pulsarError`
 - [ ]  Use `thiserror` crate for automatic `From` implementations
 - [ ]  Use `anyhow` crate in binary crates for easy error context chaining
 - [ ]  Add structured logging with `tracing` crate: `info!`, `warn!`, `error!` macros
@@ -301,7 +301,7 @@
 - [ ]  Install `wrk` and `autocannon` benchmarking tools
 - [ ]  Benchmark baseline: Node.js `http.createServer` hello world
 - [ ]  Benchmark: Fastify hello world
-- [ ]  Benchmark: `@ferrum/http-server` hello world (same handler logic)
+- [ ]  Benchmark: `@pulsar/http-server` hello world (same handler logic)
 - [ ]  Measure for each: req/sec, p50/p95/p99 latency, memory RSS
 - [ ]  Run `wrk -t4 -c100 -d30s` — 4 threads, 100 connections, 30 seconds
 - [ ]  Write `BENCHMARKS.md` with results table, methodology, test machine specs
@@ -393,9 +393,9 @@
 
 ### What to implement
 
-- [ ]  Design `ferrum-gateway.yaml` config format — document every field
+- [ ]  Design `pulsar-gateway.yaml` config format — document every field
 - [ ]  Add `serde` + `serde_yaml` to parse config at startup
-- [ ]  Build CLI using `clap` crate: `ferrum-gateway start --config gateway.yaml`
+- [ ]  Build CLI using `clap` crate: `pulsar-gateway start --config gateway.yaml`
 - [ ]  Implement hot reload: watch config file with `notify` crate
 - [ ]  On file change: re-parse config, rebuild pipeline, swap atomically with `ArcSwap`
 - [ ]  Validate config at startup: missing upstream → clear error message with line number
@@ -415,7 +415,7 @@
 
 ### What to implement
 
-- [ ]  Integrate `ferrum-rate-limiter` crate as a gateway plugin
+- [ ]  Integrate `pulsar-rate-limiter` crate as a gateway plugin
 - [ ]  Extract rate limit key: `X-API-Key` header, then JWT `sub` claim, then IP fallback
 - [ ]  Configure per-route rate limits in `gateway.yaml`
 - [ ]  Return `429 Too Many Requests` with `Retry-After` and `X-RateLimit-*` headers
@@ -545,8 +545,8 @@
 
 ### What to implement
 
-- [ ]  Benchmark: `ferrum-lb` in front of 3 Node.js workers vs single Node.js
-- [ ]  Benchmark: `ferrum-lb` vs `http-proxy` npm package
+- [ ]  Benchmark: `pulsar-lb` in front of 3 Node.js workers vs single Node.js
+- [ ]  Benchmark: `pulsar-lb` vs `http-proxy` npm package
 - [ ]  Measure: req/sec, p99 latency, CPU usage of LB process itself
 - [ ]  Test failover speed: kill one backend mid-benchmark, measure time until traffic redistributes
 - [ ]  Record all results in `crates/load-balancer/BENCHMARKS.md`
@@ -786,7 +786,7 @@
 
 - Circuit breaker pattern — prevents cascade failures in distributed systems
 - Why HalfOpen is critical — avoids oscillating between Open and Closed
-- How Netflix Hystrix implements this (Ferrum is the Rust equivalent)
+- How Netflix Hystrix implements this (pulsar is the Rust equivalent)
 
 ---
 
@@ -825,9 +825,9 @@
 - [ ]  Implement static file serving: `location /static/ → dir /var/www/static`
 - [ ]  Implement WebSocket proxying: `location /ws/ → upstream ws://localhost:4001`
 - [ ]  Forward all headers except hop-by-hop (`Connection`, `Transfer-Encoding`, `Upgrade`)
-- [ ]  Add `Via: ferrum/1.0` header to proxied requests
+- [ ]  Add `Via: pulsar/1.0` header to proxied requests
 - [ ]  Support multiple upstream locations with priority order matching
-- [ ]  Config: `ferrum-proxy.yaml` with same hot-reload mechanism as gateway
+- [ ]  Config: `pulsar-proxy.yaml` with same hot-reload mechanism as gateway
 
 ### What you learn
 
@@ -873,7 +873,7 @@
 - [ ]  Use `metrics` crate with `metrics-exporter-prometheus` for Prometheus format
 - [ ]  Expose `GET /metrics` in Prometheus text format
 - [ ]  Add histogram for request duration with buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1000ms
-- [ ]  Instrument every Ferrum component to emit metrics via `metrics::counter!` and `metrics::histogram!`
+- [ ]  Instrument every pulsar component to emit metrics via `metrics::counter!` and `metrics::histogram!`
 - [ ]  Verify with `curl localhost:9090/metrics` → Prometheus format output
 
 ### What you learn
@@ -901,7 +901,7 @@
 ### What you learn
 
 - SSE vs WebSocket — SSE is one-directional, simpler, auto-reconnects
-- How Grafana works — Ferrum dashboard is a simplified version
+- How Grafana works — pulsar dashboard is a simplified version
 - Real-time chart rendering without performance issues using windowed data
 
 ---
@@ -922,7 +922,7 @@
 - [ ]  Expose `#[napi]` functions for rate limiter: `createLimiter`, `checkLimit`
 - [ ]  Expose `#[napi]` classes for queue: `Queue`, `Worker`
 - [ ]  Handle Rust `Result<T, E>` → JS `Promise<T>` rejection automatically
-- [ ]  Test from Node.js: `const { createServer } = require("@ferrum/http-server")`
+- [ ]  Test from Node.js: `const { createServer } = require("@pulsar/http-server")`
 - [ ]  Verify all async Rust functions return proper JS Promises
 
 ### What you learn
@@ -940,10 +940,10 @@
 ### What to implement
 
 - [ ]  Design clean JS API for each component — prioritize developer experience
-- [ ]  HTTP server: `const app = ferrum.createApp(); app.get('/path', handler); app.listen(3000)`
-- [ ]  Gateway: `const gw = ferrum.gateway({ upstream: 'http://app:4000', plugins: [...] })`
-- [ ]  Rate limiter: `const limiter = ferrum.rateLimit({ max: 100, window: '1m' })`
-- [ ]  Queue: `const q = ferrum.queue('emails'); q.process(async job => { ... })`
+- [ ]  HTTP server: `const app = pulsar.createApp(); app.get('/path', handler); app.listen(3000)`
+- [ ]  Gateway: `const gw = pulsar.gateway({ upstream: 'http://app:4000', plugins: [...] })`
+- [ ]  Rate limiter: `const limiter = pulsar.rateLimit({ max: 100, window: '1m' })`
+- [ ]  Queue: `const q = pulsar.queue('emails'); q.process(async job => { ... })`
 - [ ]  Write TypeScript type definitions `.d.ts` for every export
 - [ ]  Write JSDoc comments for every public function
 - [ ]  Write 20 integration tests in Node.js using `node:test`
@@ -962,16 +962,16 @@
 
 ### What to implement
 
-- [ ]  Map all Rust `FerrumError` variants to typed JS Error subclasses
-- [ ]  `FerrumConnectionError`, `FerrumTimeoutError`, `FerrumRateLimitError` etc.
+- [ ]  Map all Rust `pulsarError` variants to typed JS Error subclasses
+- [ ]  `pulsarConnectionError`, `pulsarTimeoutError`, `pulsarRateLimitError` etc.
 - [ ]  Add `code` property to every error for programmatic handling
-- [ ]  Integrate with Node.js `debug` module: `DEBUG=ferrum:* node app.js`
+- [ ]  Integrate with Node.js `debug` module: `DEBUG=pulsar:* node app.js`
 - [ ]  Emit Node.js `EventEmitter` events: `'error'`, `'connect'`, `'disconnect'`
 - [ ]  Write test: every error path throws correct typed error with correct `code`
 
 ### What you learn
 
-- Error subclassing in JS — `class FerrumError extends Error`
+- Error subclassing in JS — `class pulsarError extends Error`
 - Why error `code` properties matter — allows `if (err.code === 'RATE_LIMITED')`
 - Node.js debug module internals — environment-variable controlled logging
 
@@ -987,13 +987,13 @@
 
 ### What to implement
 
-- [ ]  Create `packages/@ferrum/http-server-linux-x64/package.json` — `"bin"` points to binary
+- [ ]  Create `packages/@pulsar/http-server-linux-x64/package.json` — `"bin"` points to binary
 - [ ]  Create same for: `darwin-x64`, `darwin-arm64`, `win32-x64`
-- [ ]  Create `packages/@ferrum/http-server/package.json` with `optionalDependencies` for all 4
-- [ ]  Write `packages/@ferrum/http-server/scripts/install.js` — detect platform, locate binary
-- [ ]  Write `packages/@ferrum/http-server/index.js` — load binary, export JS API
+- [ ]  Create `packages/@pulsar/http-server/package.json` with `optionalDependencies` for all 4
+- [ ]  Write `packages/@pulsar/http-server/scripts/install.js` — detect platform, locate binary
+- [ ]  Write `packages/@pulsar/http-server/index.js` — load binary, export JS API
 - [ ]  Test locally: `npm pack && npm install ./<tarball>` → verify binary runs
-- [ ]  Repeat structure for every Ferrum component crate
+- [ ]  Repeat structure for every pulsar component crate
 
 ### What you learn
 
@@ -1014,7 +1014,7 @@
 - [ ]  Install Rust targets: `rustup target add aarch64-apple-darwin` on macOS
 - [ ]  Install `cross` crate for Linux ARM64 cross-compilation via Docker
 - [ ]  Build command per target: `cargo build --release --target <triple>`
-- [ ]  Strip debug symbols: `strip target/<triple>/release/ferrum-gateway` on Linux/macOS
+- [ ]  Strip debug symbols: `strip target/<triple>/release/pulsar-gateway` on Linux/macOS
 - [ ]  Upload binaries as GitHub Release assets
 - [ ]  Add second job: publish npm packages using `npm publish --access public` with `NPM_TOKEN` secret
 
@@ -1057,7 +1057,7 @@
 
 ### What to implement
 
-- [ ]  Setup Docusaurus in `docs/` with custom Ferrum theme
+- [ ]  Setup Docusaurus in `docs/` with custom pulsar theme
 - [ ]  Write Getting Started guide: install → hello world in under 5 minutes
 - [ ]  Write API reference for every package: every config option, every method, return type
 - [ ]  Write migration guide: "Coming from Express" — side-by-side comparison
@@ -1103,7 +1103,7 @@
 
 - [ ]  Create `docs/benchmarks.md` with all benchmark results from all phases
 - [ ]  Include test methodology: machine spec, OS, Node.js version, Rust version, wrk version
-- [ ]  Include comparison tables: Ferrum vs competitors for each component
+- [ ]  Include comparison tables: pulsar vs competitors for each component
 - [ ]  Include reproducibility instructions: how to run benchmarks yourself
 - [ ]  Add charts using Docusaurus chart plugin
 - [ ]  Write honest caveats: what benchmarks do and don't measure
@@ -1170,7 +1170,7 @@
 ### What to implement
 
 - [ ]  Create `tests/` folder at monorepo root
-- [ ]  Write `docker-compose.yml`: starts all Ferrum components + test Node.js app
+- [ ]  Write `docker-compose.yml`: starts all pulsar components + test Node.js app
 - [ ]  Write integration test runner using `vitest` in Node.js
 - [ ]  Test 1: full request flow — client → HTTP server → gateway → LB → Node.js → back
 - [ ]  Test 2: rate limiter blocks after configured limit
@@ -1186,7 +1186,7 @@
 
 ---
 
-## ☐ Phase 50 — End-to-End Load Test Without Ferrum
+## ☐ Phase 50 — End-to-End Load Test Without pulsar
 
 **Tag:** `Test` · **Estimated time:** 2 days
 
@@ -1207,18 +1207,18 @@
 
 ---
 
-## ☐ Phase 51 — End-to-End Load Test With Ferrum
+## ☐ Phase 51 — End-to-End Load Test With pulsar
 
 **Tag:** `Test` · **Estimated time:** 2 days
 
 ### What to implement
 
-- [ ]  Add Ferrum components in front of same app: HTTP server + gateway + LB (3 workers) + rate limiter
+- [ ]  Add pulsar components in front of same app: HTTP server + gateway + LB (3 workers) + rate limiter
 - [ ]  Run identical k6 tests from Phase 50
 - [ ]  Record same metrics
 - [ ]  Verify rate limiter activates at configured threshold under spike test
 - [ ]  Verify LB distributes load evenly across 3 Node.js workers
-- [ ]  Verify no memory leak over 1-hour soak test in Ferrum processes
+- [ ]  Verify no memory leak over 1-hour soak test in pulsar processes
 
 ### What you learn
 
@@ -1239,7 +1239,7 @@
 - [ ]  Corrupt WAL file — verify queue detects corruption and recovers to last valid state
 - [ ]  Introduce 500ms artificial latency to upstream — verify circuit breaker eventually opens
 - [ ]  Fill disk on queue host — verify graceful error, no panic, WAL write fails cleanly
-- [ ]  Document each chaos scenario: what happened, how Ferrum responded
+- [ ]  Document each chaos scenario: what happened, how pulsar responded
 
 ### What you learn
 
@@ -1329,27 +1329,27 @@
 
 ---
 
-## ☐ Phase 57 — Measurement: With Ferrum HTTP Server Only
+## ☐ Phase 57 — Measurement: With pulsar HTTP Server Only
 
 **Tag:** `Test` · **Estimated time:** 1 day
 
 ### What to implement
 
-- [ ]  Replace `express` with `@ferrum/http-server` — keep rest identical
+- [ ]  Replace `express` with `@pulsar/http-server` — keep rest identical
 - [ ]  Run identical k6 test
 - [ ]  Record same metrics
 - [ ]  Compare: latency delta, memory delta, req/sec delta
-- [ ]  Save to `results/phase-57-ferrum-http.json`
+- [ ]  Save to `results/phase-57-pulsar-http.json`
 
 ---
 
-## ☐ Phase 58 — Measurement: With Full Ferrum Stack
+## ☐ Phase 58 — Measurement: With Full pulsar Stack
 
 **Tag:** `Test` · **Estimated time:** 1 day
 
 ### What to implement
 
-- [ ]  Replace ALL components: `@ferrum/http-server` + `@ferrum/gateway` + `@ferrum/lb` (3 workers) + `@ferrum/rate-limiter` + `@ferrum/queue`
+- [ ]  Replace ALL components: `@pulsar/http-server` + `@pulsar/gateway` + `@pulsar/lb` (3 workers) + `@pulsar/rate-limiter` + `@pulsar/queue`
 - [ ]  Run identical k6 test
 - [ ]  Record same metrics
 - [ ]  Compare to Phase 56 baseline
@@ -1362,7 +1362,7 @@
 
 ### What to implement
 
-- [ ]  Spike test: 0 → 1000 VU instantly — run for both baseline and full Ferrum stack
+- [ ]  Spike test: 0 → 1000 VU instantly — run for both baseline and full pulsar stack
 - [ ]  Soak test: 50 VU for 2 hours — run for both
 - [ ]  Record: at what VU count does each stack start returning errors
 - [ ]  Record: memory growth over 2 hours (soak) — is there a leak?
@@ -1370,7 +1370,7 @@
 
 ---
 
-## ☐ Phase 60 — Comparison Report: Node.js vs Ferrum
+## ☐ Phase 60 — Comparison Report: Node.js vs pulsar
 
 **Tag:** `Test` · **Estimated time:** 2 days
 
@@ -1381,7 +1381,7 @@
 - [ ]  Include: summary table of all metrics across all phases
 - [ ]  Include: latency distribution charts (histogram comparison)
 - [ ]  Include: memory usage over time chart (soak test comparison)
-- [ ]  Include: honest analysis — where Ferrum wins, where tradeoffs exist
+- [ ]  Include: honest analysis — where pulsar wins, where tradeoffs exist
 - [ ]  Write 1-page executive summary for resume / portfolio
 
 ### What you learn
@@ -1420,7 +1420,7 @@
 
 ### What to implement
 
-- [ ]  Create Discord server for Ferrum community
+- [ ]  Create Discord server for pulsar community
 - [ ]  Add Discord badge and link to README
 - [ ]  Write first GitHub Discussion: "Roadmap and feedback request"
 - [ ]  Tag 10 issues as `good first issue` with detailed description
@@ -1456,8 +1456,8 @@
 
 ### What to implement
 
-- [ ]  Update resume: "Built Ferrum — open source Rust infrastructure toolkit for Node.js. Published on npm. X GitHub stars."
-- [ ]  Add Ferrum to portfolio website with architecture diagram and benchmark numbers
+- [ ]  Update resume: "Built pulsar — open source Rust infrastructure toolkit for Node.js. Published on npm. X GitHub stars."
+- [ ]  Add pulsar to portfolio website with architecture diagram and benchmark numbers
 - [ ]  Write 3 interview talking points for each component — practice out loud
 - [ ]  Prepare system design answer: "Design a rate limiter" using your actual implementation
 - [ ]  Prepare system design answer: "Design a load balancer" using your actual implementation
@@ -1536,8 +1536,8 @@
 
 - [ ]  Add `tonic` crate for gRPC server support
 - [ ]  Implement HTTP/JSON → gRPC transcoding in the gateway plugin
-- [ ]  Allow REST clients to call gRPC backends through Ferrum gateway
-- [ ]  Generate Protobuf definitions for Ferrum's own inter-component protocol
+- [ ]  Allow REST clients to call gRPC backends through pulsar gateway
+- [ ]  Generate Protobuf definitions for pulsar's own inter-component protocol
 - [ ]  Benchmark gRPC vs REST for inter-service communication
 
 ### What you learn
@@ -1555,8 +1555,8 @@
 ### What to implement
 
 - [ ]  Compile every benchmark result from Phases 50–69 into one document
-- [ ]  Create a 1-slide summary: "Ferrum reduced p99 latency from Xms to Yms and memory from XMB to YMB"
-- [ ]  Record a 5-minute demo video: install Ferrum on a fresh Node.js app, run load test, show dashboard
+- [ ]  Create a 1-slide summary: "pulsar reduced p99 latency from Xms to Yms and memory from XMB to YMB"
+- [ ]  Record a 5-minute demo video: install pulsar on a fresh Node.js app, run load test, show dashboard
 - [ ]  Upload demo to YouTube — link from README
 - [ ]  Write final LinkedIn post: what you built, what you learned, what it does
 - [ ]  Open source the benchmark scripts so anyone can reproduce your results
@@ -1590,3 +1590,4 @@
 
 > **You are a senior backend engineer building production infrastructure. Every phase ships something real. Every phase teaches something deep. By Phase 70 you have a published open source library, a before/after benchmark, and enough depth to answer any systems design question in any interview.**
 >
+

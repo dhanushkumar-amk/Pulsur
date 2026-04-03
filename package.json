@@ -1,8 +1,8 @@
 {
-  "name": "ferrum-monorepo",
+  "name": "pulsar-monorepo",
   "version": "0.1.0",
   "private": true,
-  "description": "High-performance infrastructure toolkit monorepo",
+  "description": "High-performance infrastructure toolkit (Pulsar)",
   "workspaces": [
     "packages/*"
   ],

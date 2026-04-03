@@ -1,4 +1,4 @@
-# Clippy Configuration for Ferrum
+# Clippy Configuration for pulsar
 
 # Disallowed methods that are potentially dangerous
 # disallowed-methods = [
@@ -17,3 +17,4 @@ missing-docs-in-crate-items = true
 
 # Allow specific types of comments
 # allow-unwrap-in-tests = true
+

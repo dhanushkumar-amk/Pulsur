@@ -1,6 +1,6 @@
-# Ferrum 🦀
+# pulsar 🦀
 
-**Ferrum** is a high-performance, modular infrastructure toolkit for building resilient distributed systems in Rust and Node.js.
+**pulsar** is a high-performance, modular infrastructure toolkit for building resilient distributed systems in Rust and Node.js.
 
 ## 🚀 Key Features
 
@@ -14,7 +14,7 @@
 ## 📁 Repository Structure
 
 ```text
-ferrum/
+pulsar/
 ├── crates/             # Rust Crate Workspace
 │   ├── http-server     # High-performance server
 │   ├── gateway         # Entry point and request routing
@@ -41,8 +41,8 @@ ferrum/
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/ferrum/ferrum.git
-    cd ferrum
+    git clone https://github.com/pulsar/pulsar.git
+    cd pulsar
     ```
 
 2.  **Build the workspace**:
@@ -62,3 +62,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+

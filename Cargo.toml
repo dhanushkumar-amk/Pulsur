@@ -15,10 +15,10 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Ferrum Maintainers"]
+authors = ["pulsar Maintainers"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/ferrum/ferrum"
+repository = "https://github.com/pulsar/pulsar"
 
 [workspace.dependencies]
 # Async Runtime
@@ -48,3 +48,4 @@ dotenvy = "0.15"
 # Utils
 uuid = { version = "1.8", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+

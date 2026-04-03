@@ -1,4 +1,4 @@
-# Contributing to Ferrum 🛸
+# Contributing to pulsar 🛸
 
 Thank you for your interest in contributing! This project is built on **Rust** and **TypeScript**, and we value code quality and clarity.
 
@@ -49,3 +49,4 @@ Every PR will trigger a CI pipeline that runs:
 - Build verification
 
 PRs will not be merged unless all checks pass.
+
