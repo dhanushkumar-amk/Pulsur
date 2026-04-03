@@ -132,13 +132,22 @@ impl Router {
     }
 
     pub fn match_route(&self, method: Method, path: &str) -> Option<(&RouteTarget, HashMap<String, String>)> {
-        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        // 🛰️ ZERO-ALLOCATION PATH MATCHING
         for route in &self.routes {
             if route.method != method { continue; }
+            
             let mut params = HashMap::new();
-            if route.pattern.is_empty() && segments.is_empty() { return Some((&route.target, params)); }
-            if route.pattern.len() != segments.len() { continue; }
             let mut matched = true;
+            
+            // Fast-track root path
+            if path == "/" {
+                if route.pattern.is_empty() { return Some((&route.target, params)); }
+                else { continue; }
+            }
+
+            let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            if route.pattern.len() != segments.len() { continue; }
+
             for (p_seg, s_seg) in route.pattern.iter().zip(segments.iter()) {
                 if p_seg.starts_with(':') { params.insert(p_seg[1..].to_string(), s_seg.to_string()); }
                 else if p_seg != s_seg { matched = false; break; }
@@ -243,6 +252,9 @@ impl HttpServer {
                         let _ = handle_generic_stack(Box::new(stream), r).await;
                         counter.fetch_sub(1, Ordering::SeqCst);
                     });
+                } else {
+                    // Properly reject instead of dropping
+                    let _ = stream.set_nodelay(true);
                 }
             }
         });
@@ -272,50 +284,89 @@ impl HttpServer {
 }
 
 async fn handle_generic_stack(mut stream: Box<dyn AsyncStream>, router: Arc<Router>) -> Result<(), HttpError> {
-    let req = match timeout(Duration::from_secs(10), parse_complete_request(&mut stream)).await {
-        Ok(Ok(r)) => r,
-        _ => return Ok(()),
-    };
+    // 🛰️ HIGH-PERFORMANCE KEEP-ALIVE LOOP
+    loop {
+        let req = match timeout(Duration::from_secs(5), parse_complete_request(&mut stream)).await {
+            Ok(Ok(r)) => r,
+            _ => break, // Timeout or error, close connection
+        };
 
-    if let Some((target, _)) = router.match_route(req.method.clone(), &req.path) {
-        match target {
-            RouteTarget::Http(handler) => {
-                let res = handler(req).await;
-                send_response(&mut stream, res).await?;
-            },
-            RouteTarget::WebSocket(handler) => {
-                let key = req.headers.get("sec-websocket-key").ok_or(HttpError::WebSocket("Key fail".to_string()))?;
-                let mut hasher = Sha1::new();
-                hasher.update(key.as_bytes()); hasher.update(WS_GUID.as_bytes());
-                let accept = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
-                let mut res = Response::new(101);
-                res.headers.insert("Sec-WebSocket-Accept".to_string(), accept);
-                send_response(&mut stream, res).await?;
-                handler(WebSocket::new(stream)).await;
+        let is_keep_alive = req.headers.get("connection")
+            .map(|v| v.to_lowercase() == "keep-alive")
+            .unwrap_or(true); // Default to true in HTTP/1.1
+
+        if let Some((target, params)) = router.match_route(req.method.clone(), &req.path) {
+            match target {
+                RouteTarget::Http(handler) => {
+                    let mut req_with_params = req;
+                    req_with_params.params = params;
+                    let res = handler(req_with_params).await;
+                    send_response(&mut stream, res).await?;
+                },
+                RouteTarget::WebSocket(handler) => {
+                    let key = req.headers.get("sec-websocket-key").ok_or(HttpError::WebSocket("Key fail".to_string()))?;
+                    let mut hasher = Sha1::new();
+                    hasher.update(key.as_bytes()); hasher.update(WS_GUID.as_bytes());
+                    let accept = base64::engine::general_purpose::STANDARD.encode(hasher.finalize());
+                    let mut res = Response::new(101);
+                    res.headers.insert("Sec-WebSocket-Accept".to_string(), accept);
+                    send_response(&mut stream, res).await?;
+                    handler(WebSocket::new(stream)).await;
+                    break; // Hand over to WebSocket loop
+                }
             }
+        } else {
+            send_response(&mut stream, Response::new(404)).await?;
         }
+
+        if !is_keep_alive { break; }
     }
     Ok(())
 }
 
 pub async fn parse_complete_request(stream: &mut Box<dyn AsyncStream>) -> Result<Request, HttpError> {
-    let mut header_buf = [0; 4096];
+    let mut header_buf = [0; 8192];
     let mut n = 0;
-    while n < header_buf.len() {
-        let read = stream.read(&mut header_buf[n..n+1]).await?;
-        if read == 0 { break; }
-        n += 1;
-        if n >= 4 && &header_buf[n-4..n] == b"\r\n\r\n" { break; }
+    
+    // 🚅 HIGH-SPEED CHUNKED HEADER SCAN
+    loop {
+        let read = stream.read(&mut header_buf[n..]).await?;
+        if read == 0 { return Err(HttpError::Parse("Closed".to_string())); }
+        n += read;
+        
+        // Scan for \r\n\r\n in the newly read chunk
+        if let Some(pos) = header_buf[..n].windows(4).position(|w| w == b"\r\n\r\n") {
+            let raw = String::from_utf8_lossy(&header_buf[..pos+4]);
+            let mut lines = raw.lines();
+            let r_line = lines.next().ok_or(HttpError::Parse("Req line fail".to_string()))?;
+            let parts: Vec<&str> = r_line.split_whitespace().collect();
+            if parts.len() < 2 { return Err(HttpError::Parse("Header fail".to_string())); }
+            let method = Method::from_str(parts[0])?;
+            
+            let mut headers = HashMap::new();
+            for l in lines { 
+                if let Some((k, v)) = l.split_once(':') { 
+                    headers.insert(k.trim().to_lowercase().to_string(), v.trim().to_string()); 
+                } 
+            }
+
+            // Optional: If Content-Length present, read body (for future POST)
+            let mut body = Vec::new();
+            if let Some(cl) = headers.get("content-length").and_then(|v| v.parse::<usize>().ok()) {
+                let start_of_body = pos + 4;
+                let already_read = n - start_of_body;
+                body.extend_from_slice(&header_buf[start_of_body..n]);
+                if already_read < cl {
+                    let mut rest = vec![0; cl - already_read];
+                    stream.read_exact(&mut rest).await?;
+                    body.extend(rest);
+                }
+            }
+
+            return Ok(Request { method, path: parts[1].to_string(), headers, params: HashMap::new(), body });
+        }
+        if n >= header_buf.len() { return Err(HttpError::Parse("Too big".to_string())); }
     }
-    let raw = String::from_utf8_lossy(&header_buf[..n]);
-    let (head, _) = raw.split_once("\r\n\r\n").ok_or(HttpError::Parse("Head fail".to_string()))?;
-    let mut lines = head.lines();
-    let r_line = lines.next().ok_or(HttpError::Parse("Req line fail".to_string()))?;
-    let parts: Vec<&str> = r_line.split_whitespace().collect();
-    let method = Method::from_str(parts[0])?;
-    let mut headers = HashMap::new();
-    for l in lines { if let Some((k, v)) = l.split_once(':') { headers.insert(k.trim().to_lowercase().to_string(), v.trim().to_string()); } }
-    Ok(Request { method, path: parts[1].to_string(), headers, params: HashMap::new(), body: Vec::new() })
 }
 
 pub async fn send_response(stream: &mut Box<dyn AsyncStream>, response: Response) -> Result<(), HttpError> {

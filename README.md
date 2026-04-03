@@ -2,6 +2,17 @@
 
 **pulsar** is a high-performance, modular infrastructure toolkit for building resilient distributed systems in Rust and Node.js.
 
+## 🛸 Phase 11: Performance Absolute
+
+Ferrum-core (Rust) sustains **22,505 Req/sec** under high load—**7.3x faster** than Node.js (3.0K) while maintaining <3ms p50 latency.
+
+| Stack | Strategy | Req/sec | Latency (p50) | scale |
+| :--- | :--- | :--- | :--- | :--- |
+| **Node Baseline** | Event-Loop | 3,061 | 32 ms | 1x |
+| **Ferrum (Rust)** | **Zero-Alloc** | **22,505** | **3 ms** | **7.3x 🚀** |
+
+> see full [BENCHMARKS.md](./BENCHMARKS.md) for details.
+
 ## 🚀 Key Features
 
 -   **High-Speed HTTP Server & Gateway**: Built atop Axum and Tower for maximum throughput.
