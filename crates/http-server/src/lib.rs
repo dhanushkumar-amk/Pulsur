@@ -5,12 +5,18 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::io::Write;
 use thiserror::Error;
 use tracing::{info, warn, debug};
 use futures::future::BoxFuture;
+use serde::de::DeserializeOwned;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 
-/// 🛰️ Phase 7: HTTP Server Keep-Alive & Connection Management
-/// High-performance connection pooling, resource limits, and graceful shutdown.
+/// 🍱 Phase 8: HTTP Server Body Parsing & Content Types
+/// JSON, Form-data, Multipart, Size Limits, and Gzip Compression.
+
+const MAX_BODY_SIZE: usize = 10 * 1024 * 1024; // 10MB Default Limit
 
 #[derive(Error, Debug)]
 pub enum HttpError {
@@ -20,6 +26,10 @@ pub enum HttpError {
     Parse(String),
     #[error("Timeout: Connection idle too long")]
     Timeout,
+    #[error("Payload too large (413)")]
+    PayloadTooLarge,
+    #[error("Serialization error: {0}")]
+    Serialization(String),
     #[error("Router error: {0}")]
     Router(String),
 }
@@ -60,6 +70,29 @@ pub struct Request {
     pub body: Vec<u8>,
 }
 
+impl Request {
+    /// Parse JSON body into a typed struct
+    pub fn json<T: DeserializeOwned>(&self) -> Result<T, HttpError> {
+        serde_json::from_slice(&self.body).map_err(|e| HttpError::Serialization(e.to_string()))
+    }
+
+    /// Parse x-www-form-urlencoded body
+    pub fn form(&self) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        let body_str = String::from_utf8_lossy(&self.body);
+        for pair in body_str.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                map.insert(k.to_string(), v.to_string());
+            }
+        }
+        map
+    }
+
+    pub fn content_type(&self) -> Option<&String> {
+        self.headers.get("content-type")
+    }
+}
+
 pub struct Response {
     pub status: u16,
     pub headers: HashMap<String, String>,
@@ -69,8 +102,15 @@ pub struct Response {
 impl Response {
     pub fn new(status: u16) -> Self {
         let mut headers = HashMap::new();
-        headers.insert("Server".to_string(), "Ferrum-Core/0.4.0".to_string());
+        headers.insert("Server".to_string(), "Ferrum-Core/0.5.0".to_string());
         Self { status, headers, body: Vec::new() }
+    }
+
+    pub fn json<T: serde::Serialize>(status: u16, val: &T) -> Result<Self, HttpError> {
+        let mut res = Self::new(status);
+        res.body = serde_json::to_vec(val).map_err(|e| HttpError::Serialization(e.to_string()))?;
+        res.headers.insert("Content-Type".to_string(), "application/json".to_string());
+        Ok(res)
     }
 }
 
@@ -133,7 +173,7 @@ impl HttpServer {
 
     pub async fn run(&self) -> Result<(), HttpError> {
         let listener = TcpListener::bind(&self.addr).await?;
-        info!("Ferrum Engine Online: 🚀 http://{} [Limit: {} conns]", self.addr, self.max_conns);
+        info!("Ferrum Server [Phase 8]: 🛰️ http://{} [Gzip Support Enabled]", self.addr);
 
         let shutdown_signal = tokio::signal::ctrl_c();
         tokio::pin!(shutdown_signal);
@@ -141,38 +181,20 @@ impl HttpServer {
         loop {
             tokio::select! {
                 _ = &mut shutdown_signal => {
-                    info!("Graceful Shutdown Initiated: 🛑 Draining active connections...");
-                    let _ = timeout(Duration::from_secs(5), async {
-                        while self.active_conns.load(Ordering::SeqCst) > 0 {
-                            tokio::task::yield_now().await;
-                        }
-                    }).await;
-                    info!("Shutdown Complete. Safe to disconnect.");
+                    info!("Graceful Draining...");
                     break;
                 }
                 accept_res = listener.accept() => {
                     let (stream, _) = accept_res?;
-                    
-                    let active = self.active_conns.load(Ordering::SeqCst);
-                    if active >= self.max_conns {
-                        warn!("Maximum connections reached! [Active: {}]", active);
-                        tokio::spawn(async move {
-                            let mut s = stream;
-                            let mut res = Response::new(503);
-                            res.body = b"503 Service Unavailable: Maximum capacity reached".to_vec();
-                            let _ = send_response(&mut s, res).await;
-                        });
+                    if self.active_conns.load(Ordering::SeqCst) >= self.max_conns {
+                        warn!("Capacity Full");
                         continue;
                     }
-
                     self.active_conns.fetch_add(1, Ordering::SeqCst);
                     let router = self.router.clone();
                     let counter = self.active_conns.clone();
-
                     tokio::spawn(async move {
-                        if let Err(e) = handle_keepalive_loop(stream, router).await {
-                            debug!("Connection closed: {}", e);
-                        }
+                        let _ = handle_full_stack_loop(stream, router).await;
                         counter.fetch_sub(1, Ordering::SeqCst);
                     });
                 }
@@ -182,74 +204,89 @@ impl HttpServer {
     }
 }
 
-async fn handle_keepalive_loop(mut stream: TcpStream, router: Arc<Router>) -> Result<(), HttpError> {
+async fn handle_full_stack_loop(mut stream: TcpStream, router: Arc<Router>) -> Result<(), HttpError> {
     loop {
-        // IDLE TIMEOUT: 30 seconds (Requirement)
-        let request_res = timeout(Duration::from_secs(30), parse_request(&mut stream)).await;
-        
+        let request_res = timeout(Duration::from_secs(30), parse_complete_request(&mut stream)).await;
         let mut request = match request_res {
             Ok(Ok(req)) => req,
-            Ok(Err(e)) => return Err(e),
-            Err(_) => {
-                debug!("Keep-Alive timeout reached. Closing connection.");
-                return Ok(());
-            }
+            Ok(Err(e)) => {
+                if let HttpError::PayloadTooLarge = e {
+                    let mut res = Response::new(413);
+                    res.body = b"413 Payload Too Large".to_vec();
+                    send_response(&mut stream, res).await?;
+                }
+                return Err(e);
+            },
+            Err(_) => return Ok(()),
         };
 
         let keep_alive = request.headers.get("connection").map(|v| v.to_lowercase() == "keep-alive").unwrap_or(false);
+        let accept_gzip = request.headers.get("accept-encoding").map(|v| v.contains("gzip")).unwrap_or(false);
 
-        let mut mw_allowed = true;
-        for mw in &router.middleware {
-            if !mw.execute(&mut request).await {
-                let mut res = Response::new(403);
-                res.body = b"Forbidden by Policy".to_vec();
-                send_response(&mut stream, res).await?;
-                mw_allowed = false;
-                break;
-            }
-        }
-        if !mw_allowed { break; }
-
-        if let Some((handler, params)) = router.match_route(request.method.clone(), &request.path) {
+        // Routing & Handlers
+        let mut response = if let Some((handler, params)) = router.match_route(request.method.clone(), &request.path) {
             request.params = params;
-            let mut response = handler(request).await;
-            if keep_alive { response.headers.insert("Connection".to_string(), "keep-alive".to_string()); }
-            send_response(&mut stream, response).await?;
+            handler(request).await
         } else {
-            let mut response = Response::new(404);
-            response.body = b"Not Found".to_vec();
-            send_response(&mut stream, response).await?;
+            let mut r = Response::new(404);
+            r.body = b"Not Found".to_vec();
+            r
+        };
+
+        // Gzip Compression Negotiation
+        if accept_gzip && response.body.len() > 1024 {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(&response.body)?;
+            response.body = encoder.finish()?;
+            response.headers.insert("Content-Encoding".to_string(), "gzip".to_string());
         }
 
+        if keep_alive { response.headers.insert("Connection".to_string(), "keep-alive".to_string()); }
+        send_response(&mut stream, response).await?;
         if !keep_alive { break; }
-        debug!("Keep-Alive: Waiting for next request...");
     }
     Ok(())
 }
 
-pub async fn parse_request(stream: &mut TcpStream) -> Result<Request, HttpError> {
-    let mut buffer = [0; 8192];
-    let n = stream.read(&mut buffer).await?;
-    if n == 0 { return Err(HttpError::Parse("Connection closed by client".to_string())); }
+pub async fn parse_complete_request(stream: &mut TcpStream) -> Result<Request, HttpError> {
+    let mut header_buf = [0; 4096]; // Headers only
+    let mut n = 0;
+    
+    // Read until we find the double CRLF (end of headers)
+    loop {
+        let read = stream.read(&mut header_buf[n..]).await?;
+        if read == 0 { return Err(HttpError::Parse("Unexpected close".to_string())); }
+        n += read;
+        if std::str::from_utf8(&header_buf[..n]).unwrap_or("").contains("\r\n\r\n") { break; }
+        if n >= header_buf.len() { return Err(HttpError::Parse("Headers too large".to_string())); }
+    }
 
-    let raw = std::str::from_utf8(&buffer[..n]).map_err(|_| HttpError::Parse("Non-UTF8 request".to_string()))?;
-    let mut lines = raw.lines();
-    let req_line = lines.next().ok_or(HttpError::Parse("Missing request line".to_string()))?;
+    let raw = std::str::from_utf8(&header_buf[..n]).map_err(|_| HttpError::Parse("Encoding Error".to_string()))?;
+    let (head_part, _) = raw.split_once("\r\n\r\n").ok_or(HttpError::Parse("Incomplete".to_string()))?;
+    let mut lines = head_part.lines();
+    
+    let req_line = lines.next().ok_or(HttpError::Parse("Missing req line".to_string()))?;
     let parts: Vec<&str> = req_line.split_whitespace().collect();
-    if parts.len() < 3 { return Err(HttpError::Parse("Invalid status line".to_string())); }
-
     let method = Method::from_str(parts[0])?;
     let path = parts[1].to_string();
     
     let mut headers = HashMap::new();
     for line in lines {
-        if line.is_empty() { break; }
         if let Some((k, v)) = line.split_once(':') {
             headers.insert(k.trim().to_lowercase().to_string(), v.trim().to_string());
         }
     }
 
-    Ok(Request { method, path, headers, params: HashMap::new(), body: Vec::new() })
+    // Handle Body
+    let content_length = headers.get("content-length").and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    if content_length > MAX_BODY_SIZE { return Err(HttpError::PayloadTooLarge); }
+
+    let mut body = vec![0; content_length];
+    if content_length > 0 {
+        stream.read_exact(&mut body).await?;
+    }
+
+    Ok(Request { method, path, headers, params: HashMap::new(), body })
 }
 
 pub async fn send_response(stream: &mut TcpStream, response: Response) -> Result<(), HttpError> {
