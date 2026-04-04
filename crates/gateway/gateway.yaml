@@ -1,0 +1,39 @@
+# 🔩 Pulsar Gateway Configuration [Phase 15]
+# Changes to 'auth' and 'transform' take effect instantly (Hot-Reload).
+# Note: Adding new routes currently requires a process restart.
+
+listen_addr: "127.0.0.1:3000"
+
+# JWT Authentication Config
+auth:
+  secret: "your-secret-key-123"
+  algorithm: "HS256"
+  bypass_paths: 
+    - "/health"
+    - "/login"
+
+# Global Request/Response Transformations
+transform:
+  prefix_strip: "/api/v1"
+  inject_response_headers:
+    Access-Control-Allow-Origin: "*"
+    X-Pulsar-Gateway: "v0.1.0"
+  strip_headers:
+    - "x-powered-by"
+    - "server"
+  body_transformations:
+    "user_id": "id"
+  response_body_strip:
+    - "internal_ptr"
+
+# Static Route Mapping
+routes:
+  - method: "GET"
+    path: "/api/v1/users"
+    upstream: "http://127.0.0.1:4000"
+  - method: "POST"
+    path: "/api/v1/users"
+    upstream: "http://127.0.0.1:4000"
+  - method: "GET"
+    path: "/health"
+    upstream: "http://127.0.0.1:4000"

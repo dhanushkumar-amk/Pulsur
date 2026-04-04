@@ -132,13 +132,11 @@ impl HttpVersion {
 pub struct Request {
     pub method: Method,
     pub path: String,
-    /// HTTP version parsed from the request line.
     pub version: HttpVersion,
-    /// All headers, keys lowercased.
     pub headers: HashMap<String, String>,
-    /// Path parameters extracted by the router (e.g. `:id`).
     pub params: HashMap<String, String>,
     pub body: Vec<u8>,
+    pub peer_addr: std::net::SocketAddr,
 }
 
 impl Request {
@@ -596,7 +594,7 @@ impl HttpServer {
                 let config  = config_h.clone();
 
                 tokio::spawn(async move {
-                    let _ = handle_connection(Box::new(stream), router, config).await;
+                    let _ = handle_connection(Box::new(stream), router, config, peer).await;
                     drop(permit); // Explicitly return the slot.
                 });
             }
@@ -628,13 +626,9 @@ impl HttpServer {
                 let config   = config_s.clone();
 
                 tokio::spawn(async move {
-                    // FIX: the permit is held from here regardless of whether the
-                    // TLS handshake succeeds. In the original, the decrement happened
-                    // to be outside the `if let Ok` — correct by coincidence. Now it
-                    // is guaranteed by `drop(permit)` at the end of this block.
                     match acceptor.accept(stream).await {
                         Ok(tls_stream) => {
-                            let _ = handle_connection(Box::new(tls_stream), router, config).await;
+                            let _ = handle_connection(Box::new(tls_stream), router, config, peer).await;
                         }
                         Err(e) => {
                             warn!("TLS handshake failed from {}: {}", peer, e);
@@ -673,7 +667,7 @@ impl HttpServer {
             let config = self.config.clone();
 
             tokio::spawn(async move {
-                let _ = handle_connection(Box::new(stream), router, config).await;
+                let _ = handle_connection(Box::new(stream), router, config, peer).await;
                 drop(permit);
             });
         }
@@ -690,13 +684,14 @@ async fn handle_connection(
     mut stream: Box<dyn AsyncStream>,
     router: Arc<Router>,
     config: Arc<ServerConfig>,
+    peer_addr: std::net::SocketAddr,
 ) -> Result<(), HttpError> {
     let parse_timeout   = Duration::from_secs(config.parse_timeout_secs);
     let handler_timeout = Duration::from_secs(config.handler_timeout_secs);
 
     loop {
         // ── Parse phase ────────────────────────────────────────
-        let req = match timeout(parse_timeout, parse_request(&mut stream)).await {
+        let req = match timeout(parse_timeout, parse_request(&mut stream, peer_addr)).await {
             Ok(Ok(r))  => r,
             Ok(Err(e)) => {
                 // Bad request — try to send a 400 before closing.
@@ -780,7 +775,10 @@ async fn handle_connection(
 /// - Buffer size increased to 16 KiB.
 /// - HTTP version parsed from the request line and stored on `Request`.
 /// - Body bytes that arrived in the same read as the headers are not re-read.
-pub async fn parse_request(stream: &mut Box<dyn AsyncStream>) -> Result<Request, HttpError> {
+pub async fn parse_request(
+    stream: &mut Box<dyn AsyncStream>,
+    peer_addr: std::net::SocketAddr,
+) -> Result<Request, HttpError> {
     let mut buf = vec![0u8; HEADER_BUF_SIZE];
     let mut n   = 0usize;
 
@@ -857,7 +855,7 @@ pub async fn parse_request(stream: &mut Box<dyn AsyncStream>) -> Result<Request,
         Vec::new()
     };
 
-    Ok(Request { method, path, version, headers, params: HashMap::new(), body })
+    Ok(Request { method, path, version, headers, params: HashMap::new(), body, peer_addr })
 }
 
 // ──────────────────────────────────────────────────────────────

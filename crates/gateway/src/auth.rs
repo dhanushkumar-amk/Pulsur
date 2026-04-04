@@ -98,7 +98,7 @@ impl Plugin for AuthPlugin {
                                Ok(token_data) => {
                     // 4. Attach status to Context metadata for downstream
                     ctx.metadata.insert("auth_sub".to_string(), token_data.claims.sub.clone());
-                    
+
                     // Flattened additional claims
                     for (k, v) in &token_data.claims.extra {
                         let val_str = match v {
@@ -107,7 +107,7 @@ impl Plugin for AuthPlugin {
                         };
                         ctx.metadata.insert(format!("auth_claim_{}", k), val_str);
                     }
-                    
+
                     tracing::info!("JWT verified: sub={}", token_data.claims.sub);
                     next.run(ctx).await
                 }
@@ -140,6 +140,7 @@ mod tests {
             headers,
             params: HashMap::new(),
             body: vec![],
+            peer_addr: "127.0.0.1:12345".parse().unwrap(),
         };
         Context::new(req)
     }

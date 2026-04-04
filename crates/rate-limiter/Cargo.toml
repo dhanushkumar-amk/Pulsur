@@ -8,3 +8,9 @@ readme.workspace = true
 repository.workspace = true
 
 [dependencies]
+tokio = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+dashmap = "5.5"
+tracing = { workspace = true }
+thiserror = "1.0"
+serde = { workspace = true, features = ["derive"] }

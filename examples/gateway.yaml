@@ -1,0 +1,69 @@
+# Pulsar Gateway Reference Configuration (Phase 15)
+# This file is watched for changes and reloaded HOT in real-time.
+
+# 1. Server Listener
+listen_addr: "0.0.0.0:8000"
+
+# 2. API Routes (Upstreams)
+# Define where to forward incoming requests.
+routes:
+  - method: "GET"
+    path: "/api/users"
+    upstream: "http://localhost:3001"
+  - method: "POST"
+    path: "/api/orders"
+    upstream: "http://localhost:3002"
+
+# 3. Global JWT Authentication
+auth:
+  secret: "pulsar_super_secret_HS256_key"
+  bypass_paths: 
+    - "/api/health"
+
+# 4. Identity-Based Rate Limiting (Phase 16)
+# Protects your backends from excessive traffic.
+# Uses Sliding Window algorithm (req per 60s).
+rate_limit:
+  # Lookup Order: X-API-Key header -> JWT 'sub' claim -> Remote IP
+  api_key_header: "x-api-key"
+  limits:
+    # Strict limit for the entire API
+    "/api": 100
+    # Even stricter limit for orders
+    "/api/orders": 10
+
+# 6. Upstream Resilience (Phase 17)
+# Global settings for all upstream calls.
+upstream:
+  # Hard timeout for every call to an upstream
+  timeout_sec: 10
+  # Max retries on 5xx or network timeout
+  max_retries: 3
+  # Base backoff in ms (increases exponentially: 100, 200, 400...)
+  base_backoff_ms: 100
+
+# 5. Advanced Transformations
+# Injects tracing, strips prefixes, maps JSON, etc.
+transform:
+  # Internal headers to remove before sending response to client
+  strip_headers:
+    - "x-internal-id"
+    - "server"
+    
+  # Remove this prefix from the path before forwarding (e.g. /api/v1/users -> /users)
+  prefix_strip: "/api"
+  
+  # Inject global headers into the response (CORS, Versioning)
+  inject_response_headers:
+    Access-Control-Allow-Origin: "*"
+    X-Gateway-Version: "Pulsar-0.1.0"
+    
+  # Request Body: Rename fields before they hit the upstream
+  body_transformations:
+    "legacy_username": "username"
+    
+  # Response Body: Purge sensitive fields
+  response_body_strip:
+    - "debug_info"
+    - "internal_ptr"
+    - "stack_trace"
