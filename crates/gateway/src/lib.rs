@@ -703,4 +703,41 @@ response_body_strip:
         
         tracing::info!("Phase 14 transformation test suite passed!");
     }
+
+    #[tokio::test]
+    async fn test_rate_limit_integration() {
+        let mut limits = HashMap::new();
+        limits.insert("/api".to_string(), 1); // Only 1 request allowed per 60s
+        
+        let rl_config = RateLimitConfig {
+            api_key_header: "x-api-key".to_string(),
+            limits,
+        };
+        
+        let plugin = RateLimitPlugin::new(rl_config);
+        
+        // Mock a final forwarder that always returns 200
+        struct SuccessPlugin;
+        impl Plugin for SuccessPlugin {
+            fn call<'a>(&'a self, _ctx: &'a mut Context, _next: Next) -> BoxFuture<'a, GatewayResponse> {
+                Box::pin(async { GatewayResponse::new(200) })
+            }
+        }
+
+        let pipeline = Pipeline::new(vec![Box::new(plugin), Box::new(SuccessPlugin)]);
+
+        // First request: Should be allowed (200)
+        let ctx1 = mock_context("/api/users", None);
+        let res1 = pipeline.execute(ctx1).await;
+        assert_eq!(res1.status, 200);
+
+        // Second request from same IP (127.0.0.1): Should be rejected (429)
+        let ctx2 = mock_context("/api/users", None);
+        let res2 = pipeline.execute(ctx2).await;
+        assert_eq!(res2.status, 429);
+        assert!(res2.headers.contains_key("x-ratelimit-limit"));
+        assert!(res2.headers.contains_key("retry-after"));
+        
+        tracing::info!("Phase 16 Rate Limit integration test passed!");
+    }
 }
