@@ -1,10 +1,13 @@
 {
   "name": "js-sdk",
   "version": "1.0.0",
-  "description": "",
+  "description": "pulsur queue websocket sdk",
   "main": "index.js",
   "scripts": {
     "test": "echo \"No js-sdk tests configured yet\""
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
   },
   "keywords": [],
   "author": "",
