@@ -10,6 +10,8 @@ dist/
 out/
 build/
 .npm
+packages/@pulsur/**/bin/
+packages/@pulsur/http-server/binary-path.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

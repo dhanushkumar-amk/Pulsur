@@ -1,0 +1,21 @@
+{
+  "name": "@pulsur/http-server-darwin-arm64",
+  "version": "0.1.0",
+  "description": "macOS arm64 binary for @pulsur/http-server",
+  "files": [
+    "bin"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "bin": {
+    "pulsur-http-server": "./bin/pulsur-http-server"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@pulsur/http-server-linux-x64",
+  "version": "0.1.0",
+  "description": "Linux x64 binary for @pulsur/http-server",
+  "files": [
+    "bin"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "bin": {
+    "pulsur-http-server": "./bin/pulsur-http-server"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

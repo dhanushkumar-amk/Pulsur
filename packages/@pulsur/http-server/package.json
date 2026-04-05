@@ -1,0 +1,27 @@
+{
+  "name": "@pulsur/http-server",
+  "version": "0.1.0",
+  "description": "Pulsur HTTP server binary loader and JS launcher",
+  "main": "index.js",
+  "files": [
+    "bin",
+    "binary-path.json",
+    "index.js",
+    "scripts"
+  ],
+  "scripts": {
+    "install": "node ./scripts/install.js",
+    "prepack": "node ../../../scripts/stage-npm-binary.js --component http-server --package @pulsur/http-server --profile release",
+    "test:package": "node -e \"const pkg=require('./index.js'); console.log(pkg.getBinaryPath())\""
+  },
+  "optionalDependencies": {
+    "@pulsur/http-server-darwin-arm64": "0.1.0",
+    "@pulsur/http-server-darwin-x64": "0.1.0",
+    "@pulsur/http-server-linux-x64": "0.1.0",
+    "@pulsur/http-server-win32-x64": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

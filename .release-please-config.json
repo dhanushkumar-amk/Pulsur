@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "packages": {
+    ".": {
+      "component": "pulsur",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        "Cargo.toml",
+        "package.json",
+        "packages/js-sdk/package.json",
+        "packages/@pulsur/http-server/package.json",
+        "packages/@pulsur/http-server-linux-x64/package.json",
+        "packages/@pulsur/http-server-darwin-x64/package.json",
+        "packages/@pulsur/http-server-darwin-arm64/package.json",
+        "packages/@pulsur/http-server-win32-x64/package.json"
+      ]
+    }
+  }
+}
