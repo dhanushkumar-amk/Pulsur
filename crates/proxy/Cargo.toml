@@ -8,3 +8,23 @@ readme.workspace = true
 repository.workspace = true
 
 [dependencies]
+arc-swap = "1.7"
+axum = { workspace = true, features = ["ws"] }
+futures-util = "0.3"
+http = { workspace = true }
+mime_guess = "2.0"
+moka = { version = "0.12", features = ["sync"] }
+notify = "8.2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = "0.9"
+sha2 = "0.10"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-tungstenite = "0.24"
+tracing = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = "3.12"
+tower = { workspace = true }
