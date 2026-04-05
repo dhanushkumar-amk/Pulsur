@@ -77,6 +77,10 @@ impl<K: Hash + Eq + Clone, V: Clone> SimpleHashMap<K, V> {
     pub fn len(&self) -> usize {
         self.size
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.size == 0
+    }
 }
 
 #[cfg(test)]

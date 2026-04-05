@@ -1,23 +1,45 @@
-# 🚀 Ferrum Performance Laboratory: Phase 11 Evidence
+# pulsur Benchmarks
 
-High-precision stress tests over HTTP/1.1 at 100 concurrent connections.
-Built for: **Windows (x86_64-pc-windows-msvc)**
-Runtime: **Tokio v1.37 / Ring-backed TLS**
+Fresh local benchmark run captured on `2026-04-05` from the repo root on the current Windows workstation.
 
-| Candidate | Strategy | Req/sec (Avg) | Latency (p50) | Latency (p99) | Performance Delta |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Node.js (Built-in)** | Event-Loop (Single) | 3,061.20 | 32 ms | 56 ms | **Baseline (1x)** |
-| **Fastify (Node)** | Optimized Parser | 4,213.50 | 23 ms | 48 ms | **+37% (1.3x)** |
-| 🛸 **Ferrum (Rust)** | Multi-Threaded / Zero-Alloc | **22,505.60** | **3 ms** | **20 ms** | **+635% (7.3x)** |
+## Methodology
 
-## 🛰️ Evolution Ledger: Phase 11 Optimizations
+- Tool: `npx autocannon`
+- Duration: `10s`
+- Connections: `100`
+- Threads: `4`
+- Baseline: `node benchmarks/node_http.js`
+- pulsur path: `target/release/examples/benchmark.exe`
+- Warm-up before each run: `4s`
+- Protocol under test: plain HTTP/1.1 on localhost
 
-- **Persistent-IO / Keep-Alive**: Restored connection reuse, eliminating handshake overhead. 🏎️🔥
-- **Zero-Allocation Router**: Implemented a prefix-matching scanner for hot-path routing. 🛰️🔥
-- **Fast-Status Parser**: Synchronized chunked reading and predictable protocol status formatting. 🏎️🔥
+## Results
 
-> [!TIP]
-> At 22K+ Req/sec, Ferrum is approaching the local saturation point of the Windows networking stack.
+| Stack | Avg req/sec | p50 latency | p99 latency | Errors | Working set after warm-up | Startup to ready |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Node.js baseline | 6,157.4 | 12 ms | 82 ms | 0 | 28.50 MB | 1982.15 ms |
+| pulsur HTTP server | 8,114.9 | 9 ms | 63 ms | 0 | 7.49 MB | 1842.28 ms |
 
----
-🛰️ **Ferrum Engine: Phase 11 Absolute Achieved.** 🏎️🚀
+## Delta vs Baseline
+
+- Throughput: `+31.8%`
+- p50 latency: `-25.0%`
+- p99 latency: `-23.2%`
+- Working set: `-73.7%`
+- Startup time: `-7.1%`
+
+## Internal HTTP Microbenchmarks
+
+Measured with `cargo test -p http_server --test benchmark -- --ignored --nocapture`.
+
+| Operation | Result |
+| :--- | ---: |
+| `router.match_route` | `119,051 ops/sec` |
+| `parse_request` | `28,338 ops/sec` |
+| `send_response` | `14,687 ops/sec` |
+
+## Assessment
+
+For the current hello-world style workload, `pulsur` is clearly faster and lighter than the plain Node baseline. That is a good result.
+
+This is not yet enough to claim final production-grade performance across real traffic shapes. The repo still needs longer soak tests, spike tests, multi-route gateway benchmarks, security audit coverage, and end-to-end measurements with the full stack enabled together.

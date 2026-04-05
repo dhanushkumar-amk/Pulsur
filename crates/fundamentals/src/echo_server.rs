@@ -39,7 +39,6 @@ fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::{Read, Write};
     use std::net::{TcpStream, TcpListener};
     use std::thread;
@@ -52,13 +51,11 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         
         thread::spawn(move || {
-            for stream in listener.incoming() {
-                if let Ok(mut stream) = stream {
-                    let mut buffer = [0; 512];
-                    if let Ok(n) = stream.read(&mut buffer) {
-                        if n > 0 {
-                            let _ = stream.write_all(&buffer[..n]);
-                        }
+            for mut stream in listener.incoming().flatten() {
+                let mut buffer = [0; 512];
+                if let Ok(n) = stream.read(&mut buffer) {
+                    if n > 0 {
+                        let _ = stream.write_all(&buffer[..n]);
                     }
                 }
             }
@@ -84,13 +81,11 @@ mod tests {
          let addr = listener.local_addr().unwrap();
          
          thread::spawn(move || {
-             for stream in listener.incoming() {
-                if let Ok(mut stream) = stream {
-                    let mut buffer = [0; 512];
-                    while let Ok(n) = stream.read(&mut buffer) {
-                        if n == 0 { break; }
-                        let _ = stream.write_all(&buffer[..n]);
-                    }
+             for mut stream in listener.incoming().flatten() {
+                let mut buffer = [0; 512];
+                while let Ok(n) = stream.read(&mut buffer) {
+                    if n == 0 { break; }
+                    let _ = stream.write_all(&buffer[..n]);
                 }
              }
          });

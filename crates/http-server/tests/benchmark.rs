@@ -62,7 +62,8 @@ async fn benchmark_parse_request() {
         writer.shutdown().await.unwrap();
 
         let mut stream: Box<dyn AsyncStream> = Box::new(reader);
-        let request = parse_request(&mut stream).await.unwrap();
+        let peer_addr = "127.0.0.1:8080".parse().unwrap();
+        let request = parse_request(&mut stream, peer_addr).await.unwrap();
         assert_eq!(request.method, Method::POST);
         assert_eq!(request.path, "/users/42");
         assert_eq!(request.body.len(), 27);

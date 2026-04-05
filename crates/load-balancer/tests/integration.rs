@@ -5,7 +5,6 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tracing::info;
-use tracing_subscriber;
 
 async fn health_handler() -> impl IntoResponse {
     "OK"

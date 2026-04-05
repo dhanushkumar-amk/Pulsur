@@ -283,8 +283,8 @@ impl Router {
 
             let mut matched = true;
             for (p_seg, s_seg) in route.pattern.iter().zip(segments.iter()) {
-                if p_seg.starts_with(':') {
-                    params.insert(p_seg[1..].to_string(), s_seg.to_string());
+                if let Some(param_name) = p_seg.strip_prefix(':') {
+                    params.insert(param_name.to_string(), s_seg.to_string());
                 } else if p_seg != s_seg {
                     matched = false;
                     break;
@@ -358,6 +358,7 @@ impl WebSocket {
     ///   - 0–125  → that value is the length
     ///   - 126    → read the next 2 bytes as a big-endian u16
     ///   - 127    → read the next 8 bytes as a big-endian u64
+    ///
     /// Messages over 125 bytes were silently corrupted in the original because
     /// the length bytes were consumed as if they were payload data.
     pub async fn next_message(&mut self) -> Result<Option<WsMessage>, HttpError> {
@@ -413,15 +414,15 @@ impl WebSocket {
             0x8 => {
                 // Connection close — echo a close frame and signal EOF.
                 let _ = self.send_frame(0x88, &[]).await;
-                return Ok(None);
+                Ok(None)
             }
             0x9 => {
                 // Ping — RFC 6455 §5.5.2 requires an immediate pong.
                 self.send_frame(0x8A, &payload).await?;
                 // Return the ping event to the caller so they can log it.
-                return Ok(Some(WsMessage::Ping));
+                Ok(Some(WsMessage::Ping))
             }
-            0xA => return Ok(Some(WsMessage::Pong)),
+            0xA => Ok(Some(WsMessage::Pong)),
             0x1 => {
                 let text = String::from_utf8(payload)
                     .map_err(|e| HttpError::WebSocket(e.to_string()))?;

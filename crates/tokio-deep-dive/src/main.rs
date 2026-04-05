@@ -2,7 +2,6 @@ use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration};
-use std::sync::Arc;
 use tracing::{info, error};
 
 #[tokio::main]
@@ -160,7 +159,6 @@ async fn run_mpsc_demo() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::sync::mpsc;
 
     /// Write test: spawn 100 tasks, each sends a message, verify all received

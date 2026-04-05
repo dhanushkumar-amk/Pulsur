@@ -1,4 +1,4 @@
-# 🛸 Ferrum Benchmark Orchestrator
+# 🛸 pulsur Benchmark Orchestrator
 # High-precision cross-stack performance comparison.
 
 $Duration = "10s"
@@ -31,5 +31,5 @@ Run-Protocol-Test "Node HTTP" 3001 "node" "benchmarks/node_http.js"
 # 2. Fastify (Port 3002)
 Run-Protocol-Test "Fastify" 3002 "node" "benchmarks/fastify_http.js"
 
-# 3. Ferrum (Port 8080)
-Run-Protocol-Test "Ferrum" 8080 "target/release/examples/benchmark.exe" ""
+# 3. pulsur (Port 8080)
+Run-Protocol-Test "pulsur" 8080 "target/release/examples/benchmark.exe" ""

@@ -3,7 +3,7 @@ const fs = require('fs');
 const files = {
     'Node HTTP': 'benchmarks/node_results.json',
     'Fastify': 'benchmarks/fastify_results.json',
-    'Ferrum (Rust)': 'benchmarks/rust_results.json'
+    'pulsur (Rust)': 'benchmarks/rust_results.json'
 };
 
 console.log('| Candidate | Req/sec (Avg) | Latency (p50) | Latency (p99) |');

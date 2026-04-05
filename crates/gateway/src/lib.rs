@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use arc_swap::ArcSwap;
 use std::path::Path;
 use notify::{Watcher, RecursiveMode};
-use serde_yaml;
+use dashmap::DashMap;
+use std::time::Duration;
 
 pub mod auth;
 pub use auth::*;
@@ -116,15 +117,31 @@ fn default_api_key_header() -> String { "x-api-key".to_string() }
 /// A specialized plugin for Phase 16: Identity-based Sliding Window Rate Limiting.
 pub struct RateLimitPlugin {
     config: RateLimitConfig,
-    limiter: rate_limiter::SlidingWindowRateLimiter,
+    limiters: DashMap<u32, Arc<rate_limiter::SlidingWindowRateLimiter>>,
 }
 
 impl RateLimitPlugin {
     pub fn new(config: RateLimitConfig) -> Self {
         Self {
             config,
-            limiter: rate_limiter::SlidingWindowRateLimiter::new(),
+            limiters: DashMap::new(),
         }
+    }
+
+    fn limiter_for(
+        &self,
+        limit: u32,
+    ) -> Result<Arc<rate_limiter::SlidingWindowRateLimiter>, rate_limiter::RateLimiterError> {
+        if let Some(existing) = self.limiters.get(&limit) {
+            return Ok(Arc::clone(existing.value()));
+        }
+
+        let limiter = Arc::new(rate_limiter::SlidingWindowRateLimiter::new(
+            Duration::from_secs(60),
+            limit as usize,
+        )?);
+        self.limiters.insert(limit, Arc::clone(&limiter));
+        Ok(limiter)
     }
 }
 
@@ -136,13 +153,16 @@ impl Plugin for RateLimitPlugin {
             let mut limit = None;
             for (prefix, l) in &self.config.limits {
                 if path.starts_with(prefix) {
-                    limit = Some(*l);
+                    match limit {
+                        Some((best_prefix_len, _)) if best_prefix_len >= prefix.len() => {}
+                        _ => limit = Some((prefix.len(), *l)),
+                    }
                 }
             }
 
             // 2. If no limit is configured for this path, skip
             let limit = match limit {
-                Some(l) => l,
+                Some((_, configured_limit)) => configured_limit,
                 None => return next.run(ctx).await,
             };
 
@@ -156,20 +176,28 @@ impl Plugin for RateLimitPlugin {
             };
 
             // 4. Check with high-performance limiter
-            match self.limiter.check(&key, limit).await {
+            let limiter = match self.limiter_for(limit) {
+                Ok(limiter) => limiter,
+                Err(e) => {
+                    tracing::error!("invalid rate limiter configuration for path {}: {}", path, e);
+                    return next.run(ctx).await;
+                }
+            };
+
+            match limiter.check_key(&key) {
                 Ok(status) => {
                     if !status.allowed {
                         tracing::warn!("Rate limit exceeded for key: {} (Path: {})", key, path);
                         metrics::counter!("gateway.rate_limit_exceeded_total", "key" => key.clone(), "path" => path.to_string()).increment(1);
                         
                         let mut res = GatewayResponse::new(429);
-                        res.headers.insert("retry-after".to_string(), "60".to_string());
+                        res.headers.insert("retry-after".to_string(), status.retry_after_secs.to_string());
                         res.headers.insert("x-ratelimit-limit".to_string(), status.limit.to_string());
                         res.headers.insert("x-ratelimit-remaining".to_string(), "0".to_string());
-                        res.headers.insert("x-ratelimit-reset-at".to_string(), status.reset_at.to_rfc3339());
+                        res.headers.insert("x-ratelimit-reset".to_string(), status.reset_after_secs.to_string());
                         
                         // User-friendly excess message
-                        res.body = format!("Rate limit exceeded. Try again in {} seconds.", (status.reset_at - chrono::Utc::now()).num_seconds())
+                        res.body = format!("Rate limit exceeded. Try again in {} seconds.", status.retry_after_secs)
                             .as_bytes().to_vec();
                         return res;
                     }
@@ -178,7 +206,7 @@ impl Plugin for RateLimitPlugin {
                     let mut res = next.run(ctx).await;
                     res.headers.insert("x-ratelimit-limit".to_string(), status.limit.to_string());
                     res.headers.insert("x-ratelimit-remaining".to_string(), status.remaining.to_string());
-                    res.headers.insert("x-ratelimit-reset-at".to_string(), status.reset_at.to_rfc3339());
+                    res.headers.insert("x-ratelimit-reset".to_string(), status.reset_after_secs.to_string());
                     res
                 }
                 Err(e) => {
@@ -305,11 +333,6 @@ impl Plugin for TransformPlugin {
 }
 
 
-/// Generic Passthrough Plugin to send the context to an upstream.
-pub struct PassthroughPlugin {
-    client: reqwest::Client,
-}
-
 /// Configuration for the Upstream Forwarder (Phase 17).
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpstreamConfig {
@@ -417,7 +440,17 @@ impl Plugin for ResilientPassthroughPlugin {
                     }
 
                     // 2. Timeout (Phase 17)
-                    Ok(Err(e)) if e.is_timeout() || matches!(result, Err(_)) => {
+                    Ok(Err(e)) if e.is_timeout() => {
+                        if attempts < self.config.max_retries {
+                             attempts += 1;
+                             let wait = self.calculate_backoff(attempts);
+                             tracing::warn!("Upstream timeout. Retrying in {}ms (Attempt {})...", wait, attempts);
+                             tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+                             continue;
+                        }
+                        return self.bad_gateway("Upstream request timed out after all attempts.");
+                    }
+                    Err(_) => {
                         if attempts < self.config.max_retries {
                              attempts += 1;
                              let wait = self.calculate_backoff(attempts);
@@ -627,19 +660,6 @@ mod tests {
         Context::new(req)
     }
 
-    struct MockNext;
-    impl Plugin for MockNext {
-        fn call<'a>(&'a self, _ctx: &'a mut Context, _next: Next) -> BoxFuture<'a, GatewayResponse> {
-            Box::pin(async {
-                let mut res = GatewayResponse::new(200);
-                res.headers.insert("content-type".to_string(), "application/json".to_string());
-                res.headers.insert("x-internal-id".to_string(), "secret".to_string());
-                res.body = r#"{"status":"ok","debug_info":"some_leak"}"#.as_bytes().to_vec();
-                res
-            })
-        }
-    }
-
     #[tokio::test]
     async fn test_transform_plugin_full_suite() {
         let yaml = r#"
@@ -694,7 +714,7 @@ response_body_strip:
         assert_eq!(res.headers.get("x-test").unwrap(), "Pulsar");
 
         // 3. Verify Response Header Stripping
-        assert!(res.headers.get("x-internal-id").is_none());
+        assert!(!res.headers.contains_key("x-internal-id"));
 
         // 4. Verify Response Body Stripping
         let body_val: serde_json::Value = serde_json::from_slice(&res.body).unwrap();

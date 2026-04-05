@@ -1,4 +1,4 @@
-use http_server::{HttpServer, Router, Method, Response};
+use http_server::{HttpServer, Method, Response, Router, ServerConfig, WsMessage};
 use std::sync::Arc;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -33,22 +33,40 @@ async fn main() -> anyhow::Result<()> {
     }));
 
     // Real-Time Echo WebSocket Route
-    router.ws("/ws", Arc::new(|mut ws| {
+    router.ws("/ws", Arc::new(|_ctx, mut ws| {
         async move {
             info!("🚀 Real-time session established via /ws");
             while let Ok(Some(msg)) = ws.next_message().await {
-                info!("Echoing message: {}", msg);
-                let _ = ws.send_text(&format!("Pulsar Echo: {}", msg)).await;
+                match msg {
+                    WsMessage::Text(text) => {
+                        info!("Echoing text message");
+                        let _ = ws.send_text(&format!("Pulsar Echo: {}", text)).await;
+                    }
+                    WsMessage::Binary(data) => {
+                        info!("Echoing binary message");
+                        let _ = ws.send_binary(&data).await;
+                    }
+                    WsMessage::Ping => info!("Received ping frame"),
+                    WsMessage::Pong => info!("Received pong frame"),
+                }
             }
         }.boxed()
     }));
 
-    let server = HttpServer::new(router, 100);
+    let server = HttpServer::new(
+        router,
+        ServerConfig {
+            max_conns: 100,
+            ..ServerConfig::default()
+        },
+    );
 
     // BIND DUAL-STACK PORTS
     // HTTP: 8080 (Public/Dev)
     // HTTPS: 3443 (Secure/Prod)
-    server.run_dual("127.0.0.1:8080", "127.0.0.1:3443").await?;
+    server
+        .run_dual("127.0.0.1:8080", "127.0.0.1:3443", "cert.pem", "key.pem")
+        .await?;
 
     Ok(())
 }
