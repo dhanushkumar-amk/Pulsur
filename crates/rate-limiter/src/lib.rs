@@ -10,6 +10,7 @@ use axum::{
     Json, Router,
 };
 use dashmap::DashMap;
+use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
@@ -474,6 +475,67 @@ impl SlidingWindowRateLimiter {
     pub fn logs_len(&self) -> usize {
         self.logs.len()
     }
+}
+
+#[derive(Clone)]
+#[napi(object)]
+pub struct JsRateLimitResult {
+    pub allowed: bool,
+    pub limit: u32,
+    pub remaining: u32,
+    pub retry_after_secs: u32,
+    pub reset_after_secs: u32,
+}
+
+impl From<RateLimitStatus> for JsRateLimitResult {
+    fn from(value: RateLimitStatus) -> Self {
+        Self {
+            allowed: value.allowed,
+            limit: value.limit as u32,
+            remaining: value.remaining as u32,
+            retry_after_secs: value.retry_after_secs as u32,
+            reset_after_secs: value.reset_after_secs as u32,
+        }
+    }
+}
+
+#[napi]
+pub struct JsSlidingWindowLimiter {
+    inner: Arc<SlidingWindowRateLimiter>,
+}
+
+#[napi]
+impl JsSlidingWindowLimiter {
+    #[napi(factory)]
+    pub fn create_limiter(max_requests: u32, window_ms: u32) -> napi::Result<Self> {
+        let limiter = SlidingWindowRateLimiter::new(
+            Duration::from_millis(u64::from(window_ms.max(1))),
+            max_requests.max(1) as usize,
+        )
+        .map_err(|err| napi::Error::from_reason(err.to_string()))?;
+
+        Ok(Self {
+            inner: Arc::new(limiter),
+        })
+    }
+
+    #[napi]
+    pub async fn check_limit(&self, key: String) -> napi::Result<JsRateLimitResult> {
+        self.inner
+            .check_key(&key)
+            .map(JsRateLimitResult::from)
+            .map_err(|err| napi::Error::from_reason(err.to_string()))
+    }
+
+    #[napi]
+    pub fn size(&self) -> u32 {
+        self.inner.logs_len() as u32
+    }
+}
+
+#[napi]
+pub fn create_limiter(max_requests: u32, window_ms: u32) -> napi::Result<JsSlidingWindowLimiter> {
+    JsSlidingWindowLimiter::create_limiter(max_requests, window_ms)
 }
 
 impl Default for SlidingWindowRateLimiter {

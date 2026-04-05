@@ -1,12 +1,14 @@
 {
   "name": "js-sdk",
-  "version": "1.0.0",
-  "description": "pulsur queue websocket sdk",
+  "version": "1.1.0",
+  "description": "Pulsur JS SDK and Node.js bridge",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
-    "test": "echo \"No js-sdk tests configured yet\""
+    "test": "node --test"
   },
   "dependencies": {
+    "debug": "^4.4.1",
     "ws": "^8.18.0"
   },
   "keywords": [],

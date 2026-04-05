@@ -7,6 +7,9 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -16,8 +19,13 @@ thiserror = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+napi = { version = "2", features = ["async"] }
+napi-derive = "2"
 
 [dev-dependencies]
 http = { workspace = true }
 proptest = "1.6"
 tower = { workspace = true, features = ["util"] }
+
+[build-dependencies]
+napi-build = "2"

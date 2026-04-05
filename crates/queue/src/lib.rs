@@ -8,6 +8,7 @@ use std::time::{Duration as StdDuration, Instant};
 
 use axum::{extract::{Path as AxumPath, State}, routing::get, Json, Router};
 use chrono::{DateTime, Utc};
+use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
@@ -594,6 +595,220 @@ impl PersistentQueue {
         File::create(&self.wal.active_path)?.sync_all()?;
         Ok(())
     }
+}
+
+#[derive(Debug)]
+struct SharedQueueHandle {
+    queue: std::sync::Mutex<Queue>,
+}
+
+#[derive(Clone)]
+#[napi(object)]
+pub struct JsQueueJob {
+    pub id: String,
+    pub queue: String,
+    pub payload_json: String,
+    pub status: String,
+    pub attempts: u32,
+    pub max_attempts: u32,
+    pub created_at: String,
+    pub scheduled_at: Option<String>,
+}
+
+impl From<Job> for JsQueueJob {
+    fn from(value: Job) -> Self {
+        Self {
+            id: value.id.to_string(),
+            queue: value.queue,
+            payload_json: String::from_utf8_lossy(&value.payload).to_string(),
+            status: format!("{:?}", value.status).to_lowercase(),
+            attempts: value.attempts,
+            max_attempts: value.max_attempts,
+            created_at: value.created_at.to_rfc3339(),
+            scheduled_at: value.scheduled_at.map(|value| value.to_rfc3339()),
+        }
+    }
+}
+
+#[derive(Clone)]
+#[napi(object)]
+pub struct JsQueueStats {
+    pub pending: u32,
+    pub processing: u32,
+    pub scheduled: u32,
+    pub completed: u32,
+    pub dead_letter: u32,
+}
+
+#[napi]
+pub struct JsQueue {
+    inner: Arc<SharedQueueHandle>,
+}
+
+#[napi]
+impl JsQueue {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(SharedQueueHandle {
+                queue: std::sync::Mutex::new(Queue::new()),
+            }),
+        }
+    }
+
+    #[napi]
+    pub async fn enqueue(
+        &self,
+        queue: String,
+        payload_json: String,
+        max_attempts: Option<u32>,
+    ) -> napi::Result<JsQueueJob> {
+        let job = Job::new(queue, payload_json.into_bytes(), max_attempts.unwrap_or(3));
+        let mut guard = self.lock_queue()?;
+        guard.enqueue(job.clone());
+        Ok(job.into())
+    }
+
+    #[napi]
+    pub async fn schedule(
+        &self,
+        queue: String,
+        payload_json: String,
+        run_at_rfc3339: String,
+        max_attempts: Option<u32>,
+    ) -> napi::Result<JsQueueJob> {
+        let run_at = DateTime::parse_from_rfc3339(&run_at_rfc3339)
+            .map_err(|err| napi::Error::from_reason(err.to_string()))?
+            .with_timezone(&Utc);
+        let job = Job::scheduled(queue, payload_json.into_bytes(), max_attempts.unwrap_or(3), run_at);
+        let mut guard = self.lock_queue()?;
+        guard.enqueue(job.clone());
+        Ok(job.into())
+    }
+
+    #[napi]
+    pub async fn dequeue(&self, queue: Option<String>) -> napi::Result<Option<JsQueueJob>> {
+        let mut guard = self.lock_queue()?;
+        let job = match queue {
+            Some(queue_name) => guard.dequeue_for_queue(&queue_name),
+            None => guard.dequeue(),
+        };
+        Ok(job.map(Into::into))
+    }
+
+    #[napi]
+    pub async fn ack(&self, id: String) -> napi::Result<JsQueueJob> {
+        let id = parse_uuid(&id)?;
+        let mut guard = self.lock_queue()?;
+        guard
+            .ack(id)
+            .map(Into::into)
+            .map_err(|err| napi::Error::from_reason(err.to_string()))
+    }
+
+    #[napi]
+    pub async fn nack(&self, id: String, reason: String) -> napi::Result<JsQueueJob> {
+        let id = parse_uuid(&id)?;
+        let mut guard = self.lock_queue()?;
+        guard
+            .nack(id, reason)
+            .map(Into::into)
+            .map_err(|err| napi::Error::from_reason(err.to_string()))
+    }
+
+    #[napi]
+    pub async fn stats(&self) -> napi::Result<JsQueueStats> {
+        let mut guard = self.lock_queue()?;
+        let _ = guard.promote_ready_jobs(Utc::now());
+        Ok(JsQueueStats {
+            pending: guard.pending_len() as u32,
+            processing: guard.processing_len() as u32,
+            scheduled: guard.scheduled_len() as u32,
+            completed: guard.completed_len() as u32,
+            dead_letter: guard.dead_letter_len() as u32,
+        })
+    }
+
+    #[napi]
+    pub fn create_worker(&self, queue: Option<String>) -> JsWorker {
+        JsWorker {
+            inner: Arc::clone(&self.inner),
+            queue,
+        }
+    }
+
+    fn lock_queue(&self) -> napi::Result<std::sync::MutexGuard<'_, Queue>> {
+        self.inner
+            .queue
+            .lock()
+            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))
+    }
+}
+
+impl Default for JsQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[napi]
+pub struct JsWorker {
+    inner: Arc<SharedQueueHandle>,
+    queue: Option<String>,
+}
+
+#[napi]
+impl JsWorker {
+    #[napi]
+    pub async fn poll_once(&self) -> napi::Result<Option<JsQueueJob>> {
+        let mut guard = self
+            .inner
+            .queue
+            .lock()
+            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))?;
+        let job = match &self.queue {
+            Some(queue_name) => guard.dequeue_for_queue(queue_name),
+            None => guard.dequeue(),
+        };
+        Ok(job.map(Into::into))
+    }
+
+    #[napi]
+    pub async fn ack(&self, id: String) -> napi::Result<JsQueueJob> {
+        let id = parse_uuid(&id)?;
+        let mut guard = self
+            .inner
+            .queue
+            .lock()
+            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))?;
+        guard
+            .ack(id)
+            .map(Into::into)
+            .map_err(|err| napi::Error::from_reason(err.to_string()))
+    }
+
+    #[napi]
+    pub async fn nack(&self, id: String, reason: String) -> napi::Result<JsQueueJob> {
+        let id = parse_uuid(&id)?;
+        let mut guard = self
+            .inner
+            .queue
+            .lock()
+            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))?;
+        guard
+            .nack(id, reason)
+            .map(Into::into)
+            .map_err(|err| napi::Error::from_reason(err.to_string()))
+    }
+}
+
+#[napi]
+pub fn create_queue() -> JsQueue {
+    JsQueue::new()
+}
+
+fn parse_uuid(value: &str) -> napi::Result<Uuid> {
+    Uuid::parse_str(value).map_err(|err| napi::Error::from_reason(err.to_string()))
 }
 
 #[derive(Debug, Clone)]

@@ -7,6 +7,9 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
@@ -24,7 +27,12 @@ rustls = { workspace = true }
 tokio-rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 rcgen = { workspace = true }
+napi = { version = "2", features = ["async"] }
+napi-derive = "2"
 
 [[test]]
 name = "benchmark"
 path = "tests/benchmark.rs"
+
+[build-dependencies]
+napi-build = "2"

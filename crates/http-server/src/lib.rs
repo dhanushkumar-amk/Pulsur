@@ -19,11 +19,12 @@ use tokio::time::{timeout, Duration};
 use tokio::sync::Semaphore;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::io::{BufReader, Cursor};
 use thiserror::Error;
 use tracing::{info, warn};
 use futures::future::BoxFuture;
+use napi_derive::napi;
 use serde::de::DeserializeOwned;
 use sha1::{Sha1, Digest};
 use base64::Engine;
@@ -922,6 +923,129 @@ fn compute_ws_accept(key: &str) -> String {
     hasher.update(key.as_bytes());
     hasher.update(WS_GUID.as_bytes());
     base64::engine::general_purpose::STANDARD.encode(hasher.finalize())
+}
+
+struct BridgeServerState {
+    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    task: Option<tokio::task::JoinHandle<()>>,
+    port: Option<u16>,
+}
+
+#[napi]
+pub struct JsServer {
+    state: Arc<StdMutex<BridgeServerState>>,
+}
+
+#[napi]
+impl JsServer {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(StdMutex::new(BridgeServerState {
+                shutdown: None,
+                task: None,
+                port: None,
+            })),
+        }
+    }
+
+    #[napi]
+    pub async fn listen(&self, port: u16) -> napi::Result<()> {
+        {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| napi::Error::from_reason("server state poisoned".to_string()))?;
+            if state.task.is_some() {
+                return Err(napi::Error::from_reason(
+                    "server is already listening".to_string(),
+                ));
+            }
+        }
+
+        let listener = TcpListener::bind(("127.0.0.1", port))
+            .await
+            .map_err(|err| napi::Error::from_reason(err.to_string()))?;
+        let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+        let task = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = &mut shutdown_rx => {
+                        break;
+                    }
+                    accept = listener.accept() => {
+                        let Ok((mut socket, _peer)) = accept else {
+                            break;
+                        };
+                        tokio::spawn(async move {
+                            let mut buffer = [0u8; 1024];
+                            let bytes_read = socket.read(&mut buffer).await.unwrap_or(0);
+                            let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+                            let body = if request.starts_with("GET /health") {
+                                r#"{"ok":true,"service":"ferrum-http"}"#
+                            } else {
+                                r#"{"ok":true,"message":"Ferrum JS bridge server"}"#
+                            };
+                            let response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                body.len(),
+                                body
+                            );
+                            let _ = socket.write_all(response.as_bytes()).await;
+                            let _ = socket.shutdown().await;
+                        });
+                    }
+                }
+            }
+        });
+
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| napi::Error::from_reason("server state poisoned".to_string()))?;
+        state.shutdown = Some(shutdown_tx);
+        state.task = Some(task);
+        state.port = Some(port);
+        Ok(())
+    }
+
+    #[napi]
+    pub async fn close(&self) -> napi::Result<()> {
+        let task = {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| napi::Error::from_reason("server state poisoned".to_string()))?;
+            if let Some(shutdown) = state.shutdown.take() {
+                let _ = shutdown.send(());
+            }
+            state.port = None;
+            state.task.take()
+        };
+
+        if let Some(task) = task {
+            let _ = task.await;
+        }
+
+        Ok(())
+    }
+
+    #[napi(getter)]
+    pub fn port(&self) -> Option<u16> {
+        self.state.lock().ok().and_then(|state| state.port)
+    }
+}
+
+impl Default for JsServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[napi]
+pub fn create_server() -> JsServer {
+    JsServer::new()
 }
 
 // ──────────────────────────────────────────────────────────────
