@@ -1,0 +1,11 @@
+warning: C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\pulsar-server\Cargo.toml: `default-features` is ignored for tracing-subscriber, since `default-features` was not specified for `workspace.dependencies.tracing-subscriber`, this could become a hard error in the future
+warning: unused import: `error`
+ --> crates\load-balancer\src\lib.rs:7:27
+  |
+7 | ...o, warn, error};
+  |             ^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `load-balancer` (lib) generated 1 warning (run `cargo fix --lib -p load-balancer` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s

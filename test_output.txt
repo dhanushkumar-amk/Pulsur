@@ -1,0 +1,18 @@
+warning: C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\pulsar-server\Cargo.toml: `default-features` is ignored for tracing-subscriber, since `default-features` was not specified for `workspace.dependencies.tracing-subscriber`, this could become a hard error in the future
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src\lib.rs (target\debug\deps\load_balancer-53ee2f605733ea6d.exe)
+
+running 4 tests
+test tests::test_least_connections ... ok
+test tests::test_runtime_add_remove ... ok
+test tests::test_weighted_round_robin ... ok
+test tests::test_round_robin_distribution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests load_balancer
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

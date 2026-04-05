@@ -1,0 +1,28 @@
+warning: C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\crates\pulsar-server\Cargo.toml: `default-features` is ignored for tracing-subscriber, since `default-features` was not specified for `workspace.dependencies.tracing-subscriber`, this could become a hard error in the future
+warning: unused import: `error`
+ --> crates\load-balancer\src\lib.rs:7:27
+  |
+7 | use tracing::{info, warn, error};
+  |                           ^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `load-balancer` (lib) generated 1 warning (run `cargo fix --lib -p load-balancer` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running tests\integration.rs (target\debug\deps\integration-d7cacf9b75480c46.exe)
+
+running 1 test
+
+thread 'test_integration_health_check_kill_server' (11376) panicked at crates\load-balancer\tests\integration.rs:52:9:
+Backend should be marked unhealthy after server 'kill'
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test test_integration_health_check_kill_server ... FAILED
+
+failures:
+
+failures:
+    test_integration_health_check_kill_server
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.14s
+
+error: test failed, to rerun pass `-p load-balancer --test integration`
