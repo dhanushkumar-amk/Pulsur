@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  gateway:
+    image: pulsur-test-harness:latest
+    command: ["gateway", "--config", "/config/gateway.yaml"]
+    volumes:
+      - ./tests/load/gateway.yaml:/config/gateway.yaml
+    ports:
+      - "8080:8080"
+    depends_on:
+      - load-balancer
+    networks:
+      - pulsur-net
+
+  load-balancer:
+    image: pulsur-test-harness:latest
+    command: ["lb", "--addr", "0.0.0.0:8081", "--backends", "node-1:3000", "--backends", "node-2:3000", "--backends", "node-3:3000"]
+    ports:
+      - "8081:8081"
+    depends_on:
+      - node-1
+      - node-2
+      - node-3
+    networks:
+      - pulsur-net
+
+  node-1:
+    build:
+      context: ./test-app
+      dockerfile: Dockerfile.node
+    environment:
+      - NODE_ID=node-1
+      - PORT=3000
+    networks:
+      - pulsur-net
+
+  node-2:
+    build:
+      context: ./test-app
+      dockerfile: Dockerfile.node
+    environment:
+      - NODE_ID=node-2
+      - PORT=3000
+    networks:
+      - pulsur-net
+
+  node-3:
+    build:
+      context: ./test-app
+      dockerfile: Dockerfile.node
+    environment:
+      - NODE_ID=node-3
+      - PORT=3000
+    networks:
+      - pulsur-net
+
+networks:
+  pulsur-net:
+    driver: bridge

@@ -11,6 +11,7 @@ members = [
     "crates/circuit-breaker",
     "crates/proxy",
     "crates/observability", "crates/fundamentals", "crates/tokio-deep-dive",
+    "tests",
 ]
 
 [workspace.package]

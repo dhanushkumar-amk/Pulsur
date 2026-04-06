@@ -1,0 +1,20 @@
+# Build Stage
+FROM rust:1.77 as builder
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /lib/apt/lists/*
+
+# Copy root files needed for workspace
+COPY . .
+
+# Build the test harness binary
+RUN cargo build --release --package pulsur-test-harness --verbose
+
+# Runtime Stage
+FROM debian:bookworm-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /lib/apt/lists/*
+COPY --from=builder /app/target/release/pulsur-test-harness /usr/local/bin/pulsur-test
+EXPOSE 8080 8081 8082
+ENTRYPOINT ["pulsur-test"]

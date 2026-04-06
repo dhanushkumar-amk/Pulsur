@@ -1,0 +1,12 @@
+{
+  "name": "pulsur-integration-tests",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0",
+    "axios": "^1.6.0",
+    "ws": "^8.14.0"
+  }
+}

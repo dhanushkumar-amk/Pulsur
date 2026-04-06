@@ -1,0 +1,21 @@
+listen_addr: "0.0.0.0:8080"
+routes:
+  - method: "GET"
+    path: "/api/health"
+    upstream: "http://load-balancer:8081"
+  - method: "GET"
+    path: "/api/compute"
+    upstream: "http://load-balancer:8081"
+  - method: "GET"
+    path: "/api/delay"
+    upstream: "http://load-balancer:8081"
+
+rate_limit:
+  api_key_header: "x-api-key"
+  limits:
+    "/api/compute": 300 # 300 per 60s
+
+upstream:
+  timeout_sec: 30
+  max_retries: 3
+  base_backoff_ms: 100

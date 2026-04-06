@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.ferrum
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./gateway/gateway.yaml:/app/gateway.yaml
+    command: ["gateway", "--config", "/app/gateway.yaml"]
+    depends_on:
+      - lb
+
+  lb:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.ferrum
+    ports:
+      - "8081:8081"
+    command: ["lb", "--addr", "0.0.0.0:8081", "--backends", "backend-1:3000", "--backends", "backend-2:3000"]
+    depends_on:
+      - backend-1
+      - backend-2
+
+  queue:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.ferrum
+    ports:
+      - "8082:8082"
+    command: ["queue", "--addr", "0.0.0.0:8082"]
+
+  backend-1:
+    build: ./backend
+    environment:
+      - PORT=3000
+
+  backend-2:
+    build: ./backend
+    environment:
+      - PORT=3000
+
+  tester:
+    image: node:20
+    volumes:
+      - ./integration:/app
+    working_dir: /app
+    environment:
+      - GATEWAY_URL=http://gateway:8080
+      - QUEUE_URL=ws://queue:8082/ws
+    command: ["sh", "-c", "npm install && npm test"]
+    depends_on:
+      - gateway
+      - queue

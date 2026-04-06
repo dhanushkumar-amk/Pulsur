@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: ./test-app
+      dockerfile: Dockerfile.node
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ID=node-1
+      - PORT=3000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M

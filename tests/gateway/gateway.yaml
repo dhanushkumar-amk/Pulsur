@@ -1,0 +1,17 @@
+listen_addr: "0.0.0.0:8080"
+routes:
+  - path: "/api"
+    method: "GET"
+    upstream: "http://lb:8081" # Routes through LB
+auth:
+  provider: "none"
+rate_limit:
+  algorithm: "token_bucket"
+  requests_per_second: 5
+  burst_size: 10
+transform:
+  strip_prefix: "/api"
+upstream:
+  timeout_ms: 5000
+  retries: 3
+  backoff_ms: 100
