@@ -2,6 +2,7 @@ module.exports = {
   docs: [
     "intro",
     "getting-started",
+    "benchmarks",
     {
       type: "category",
       label: "API Reference",
