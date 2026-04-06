@@ -16,4 +16,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 http_server = { path = "../http-server" }
+gateway = { path = "../gateway" }
+load-balancer = { path = "../load-balancer" }
+rate-limiter = { path = "../rate-limiter" }
 futures = { workspace = true }

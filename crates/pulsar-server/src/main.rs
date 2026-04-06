@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
     let server = HttpServer::new(
         router,
         ServerConfig {
-            max_conns: 100,
+            max_conns: 1000,
             ..ServerConfig::default()
         },
     );
