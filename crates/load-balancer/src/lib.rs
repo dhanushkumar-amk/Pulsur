@@ -1003,3 +1003,46 @@ mod tests {
         .expect("backend should be force removed after drain timeout");
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_fnv1a_determinism(data in any::<Vec<u8>>()) {
+            let h1 = fnv1a_hash(&data);
+            let h2 = fnv1a_hash(&data);
+            prop_assert_eq!(h1, h2);
+        }
+
+        #[test]
+        fn test_weighted_distribution_exact(
+            w1 in 1..100u32,
+            w2 in 1..100u32,
+            runs in 1000..5000usize
+        ) {
+            let pool = BackendPool::new();
+            pool.add(Backend::new("b1", w1));
+            pool.add(Backend::new("b2", w2));
+
+            let mut c1 = 0;
+            let mut c2 = 0;
+            for _ in 0..runs {
+                let b = pool.next_weighted_round_robin().unwrap();
+                if b.address == "b1" { c1 += 1; }
+                else { c2 += 1; }
+            }
+
+            let total_weight = w1 + w2;
+            let expected_c1 = (w1 as f64 / total_weight as f64) * runs as f64;
+            let expected_c2 = (w2 as f64 / total_weight as f64) * runs as f64;
+
+            // Allow for a small error margin due to integer rounding in sequence
+            // Since weighted round-robin is a sequence, not random, the error should be < total_weight
+            prop_assert!((c1 as f64 - expected_c1).abs() < total_weight as f64);
+            prop_assert!((c2 as f64 - expected_c2).abs() < total_weight as f64);
+        }
+    }
+}

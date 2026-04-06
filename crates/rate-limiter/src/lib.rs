@@ -1216,3 +1216,59 @@ mod tests {
             .and_then(|listener| listener.local_addr().ok().map(|addr| addr.port()))
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_token_bucket_refill_properties(
+            capacity in 1.0..1000.0,
+            refill_rate in 0.1..100.0,
+            wait_time_ms in 0..1000u64
+        ) {
+            let mut bucket = TokenBucket::new(capacity, refill_rate).unwrap();
+            let start_time = Instant::now();
+            
+            // Consume everything
+            bucket.try_consume(capacity);
+            prop_assert!(bucket.remaining() < 1.0);
+
+            // Wait and refill
+            let now = start_time + Duration::from_millis(wait_time_ms);
+            bucket.refill_at(now);
+
+            // Check that we didn't exceed capacity
+            prop_assert!(bucket.remaining() <= capacity);
+            
+            // Check that we refilled approximately the right amount
+            let expected_refill = (wait_time_ms as f64 / 1000.0) * refill_rate;
+            let actual_refill = bucket.remaining();
+            prop_assert!(actual_refill >= expected_refill - 0.1);
+        }
+
+        #[test]
+        fn test_sliding_window_log_properties(
+            window_ms in 10..1000u64,
+            max_reqs in 1..100usize,
+            num_reqs in 1..200usize
+        ) {
+            let window = Duration::from_millis(window_ms);
+            let mut log = SlidingWindowLog::new(window, max_reqs).unwrap();
+            let start = Instant::now();
+
+            let mut allowed_count = 0;
+            for _ in 0..num_reqs {
+                if log.allow_at(start) {
+                    allowed_count += 1;
+                }
+            }
+
+            // At the same instant, we should never allow more than max_reqs
+            prop_assert!(allowed_count <= max_reqs);
+            prop_assert_eq!(allowed_count, num_reqs.min(max_reqs));
+        }
+    }
+}

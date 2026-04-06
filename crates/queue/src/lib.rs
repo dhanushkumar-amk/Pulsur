@@ -395,7 +395,10 @@ impl Wal {
 
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
+        Self::replay_reader_into_queue(&mut reader, queue)
+    }
 
+    pub fn replay_reader_into_queue<R: Read>(reader: &mut R, queue: &mut Queue) -> Result<(), WalError> {
         loop {
             let mut len_buf = [0u8; 4];
             match reader.read_exact(&mut len_buf) {
@@ -592,9 +595,14 @@ impl PersistentQueue {
     pub fn compact(&mut self) -> Result<(), WalError> {
         self.wal.write_snapshot(&self.queue)?;
         self.wal.delete_old_segments()?;
-        File::create(&self.wal.active_path)?.sync_all()?;
         Ok(())
     }
+}
+
+/// Helper for fuzz testing the WAL replay logic.
+pub fn replay_wal_from_bytes(data: &[u8], queue: &mut Queue) -> Result<(), WalError> {
+    let mut reader = std::io::Cursor::new(data);
+    Wal::replay_reader_into_queue(&mut reader, queue)
 }
 
 #[derive(Debug)]
@@ -2517,5 +2525,51 @@ mod tests {
         }
 
         server_task.abort();
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_queue_fifo_behavior(num_jobs in 1..100usize) {
+            let mut queue = Queue::new();
+            let mut ids = Vec::new();
+
+            for i in 0..num_jobs {
+                let job = Job::new("test", vec![i as u8], 3);
+                ids.push(job.id);
+                queue.enqueue(job);
+            }
+
+            for expected_id in ids {
+                let job = queue.dequeue().unwrap();
+                prop_assert_eq!(job.id, expected_id);
+            }
+            prop_assert!(queue.dequeue().is_none());
+        }
+
+        #[test]
+        fn test_job_retry_until_dead_letter(max_attempts in 1..20u32) {
+            let mut queue = Queue::new();
+            let job = Job::new("test", vec![1], max_attempts);
+            let id = job.id;
+            queue.enqueue(job);
+
+            let mut attempts = 0;
+            while attempts < max_attempts {
+                let j = queue.dequeue().unwrap();
+                prop_assert_eq!(j.id, id);
+                queue.nack(id, "fail").unwrap();
+                attempts += 1;
+            }
+
+            prop_assert!(queue.dequeue().is_none());
+            prop_assert_eq!(queue.dead_letter_len(), 1);
+            prop_assert_eq!(queue.dead_letter_jobs()[0].id, id);
+        }
     }
 }

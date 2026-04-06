@@ -804,31 +804,7 @@ pub async fn parse_request(
     let header_section = std::str::from_utf8(&buf[..header_end])
         .map_err(|e| HttpError::Parse(format!("Non-UTF-8 headers: {}", e)))?;
 
-    let mut lines = header_section.lines();
-
-    // ── Request line ──────────────────────────────────────────
-    let request_line = lines.next()
-        .ok_or_else(|| HttpError::Parse("Empty request".to_string()))?;
-    let parts: Vec<&str> = request_line.split_whitespace().collect();
-    if parts.len() < 3 {
-        return Err(HttpError::Parse(format!("Malformed request line: {:?}", request_line)));
-    }
-
-    let method  = Method::from_str(parts[0])?;
-    let path    = parts[1].to_string();
-    let version = match parts[2] {
-        "HTTP/1.1" => HttpVersion::Http11,
-        "HTTP/1.0" => HttpVersion::Http10,
-        v => return Err(HttpError::Parse(format!("Unsupported HTTP version: {}", v))),
-    };
-
-    // ── Headers ───────────────────────────────────────────────
-    let mut headers = HashMap::new();
-    for line in lines {
-        if let Some((k, v)) = line.split_once(':') {
-            headers.insert(k.trim().to_lowercase(), v.trim().to_string());
-        }
-    }
+    let (method, path, version, headers) = parse_header_section(header_section)?;
 
     // ── Body ──────────────────────────────────────────────────
     // FIX: bytes after `\r\n\r\n` that arrived in the same buffer read must be
@@ -858,6 +834,49 @@ pub async fn parse_request(
     };
 
     Ok(Request { method, path, version, headers, params: HashMap::new(), body, peer_addr })
+}
+
+/// Parse the header section of an HTTP/1.x request synchronously.
+pub fn parse_header_section(
+    header_section: &str,
+) -> Result<(Method, String, HttpVersion, HashMap<String, String>), HttpError> {
+    let mut lines = header_section.lines();
+
+    // ── Request line ──────────────────────────────────────────
+    let request_line = lines
+        .next()
+        .ok_or_else(|| HttpError::Parse("Empty request".to_string()))?
+        .trim();
+    let parts: Vec<&str> = request_line.split_whitespace().collect();
+    if parts.len() < 3 {
+        return Err(HttpError::Parse(format!(
+            "Malformed request line: {:?}",
+            request_line
+        )));
+    }
+
+    let method = Method::from_str(parts[0])?;
+    let path = parts[1].to_string();
+    let version = match parts[2] {
+        "HTTP/1.1" => HttpVersion::Http11,
+        "HTTP/1.0" => HttpVersion::Http10,
+        v => {
+            return Err(HttpError::Parse(format!(
+                "Unsupported HTTP version: {}",
+                v
+            )))
+        }
+    };
+
+    // ── Headers ───────────────────────────────────────────────
+    let mut headers = HashMap::new();
+    for line in lines {
+        if let Some((k, v)) = line.split_once(':') {
+            headers.insert(k.trim().to_lowercase(), v.trim().to_string());
+        }
+    }
+
+    Ok((method, path, version, headers))
 }
 
 // ──────────────────────────────────────────────────────────────
