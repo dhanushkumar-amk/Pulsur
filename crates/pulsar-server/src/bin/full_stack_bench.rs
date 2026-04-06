@@ -4,7 +4,7 @@ use rate_limiter::TokenBucketRateLimiter;
 use std::sync::Arc;
 use futures::future::FutureExt;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     // 1. Setup Backend (Pulsar Server)
     let mut backend_router = Router::new();
