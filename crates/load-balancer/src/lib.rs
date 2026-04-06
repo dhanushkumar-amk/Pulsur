@@ -529,7 +529,7 @@ impl BackendPool {
             .cloned()
     }
 
-    fn backends_snapshot(&self) -> Vec<Arc<Backend>> {
+    pub fn backends_snapshot(&self) -> Vec<Arc<Backend>> {
         self.backends
             .read()
             .expect("backend pool poisoned")

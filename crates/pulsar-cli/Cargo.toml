@@ -1,0 +1,11 @@
+[package]
+name = "pulsar-cli"
+version = "0.7.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+clap = { workspace = true }
+colored = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }

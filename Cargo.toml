@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+    "crates/pulsar-cli",
     "crates/pulsar-server",
     "crates/http-server",
     "crates/gateway",
@@ -59,6 +60,8 @@ uuid = { version = "1.8", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
 jsonwebtoken = "9.3"
+clap = { version = "4.5", features = ["derive"] }
+colored = "2.1"
 
 
 
