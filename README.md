@@ -1,69 +1,97 @@
 # Pulsur 🦀
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/pulsur/pulsur/ci.yml?branch=main)](https://github.com/pulsur/pulsur/actions)
-[![NPM Version](https://img.shields.io/npm/v/@pulsur/js-sdk.svg)](https://www.npmjs.com/package/@pulsur/js-sdk)
-[![License](https://img.shields.io/github/license/pulsur/pulsur.svg)](https://github.com/pulsur/pulsur/blob/main/LICENSE)
-[![Discord](https://img.shields.io/discord/1234567890?label=discord)](https://discord.gg/pulsur)
+**Ultra-high performance, Rust-native distributed engine for modern infrastructure.**
 
-**Pulsur** is a high-performance, modular infrastructure toolkit designed to bring safe, concurrent, and ultra-fast Rust power to Node.js applications. 
+[![License](https://img.shields.io/github/license/pulsur/pulsur.svg)](LICENSE)
+[![Performance](https://img.shields.io/badge/Performance-24.9k_req/s-brightgreen)](results/FINAL-REPORT.md)
+[![Memory](https://img.shields.io/badge/Memory-3.1MB-blue)](results/FINAL-REPORT.md)
 
-## 🛸 Why Pulsur?
-
-Node.js is great for developer velocity, but sometimes you hit a wall. Pulsur provides the "heavy lifting" components built in Rust—distributed queues, rate limiters, and high-performance gateways—exposed via a simple, familiar JavaScript SDK.
-
-> **Phase 11 Benchmark Teaser:**
-> Our Rust core sustains **22,505 req/sec**—that's **7.3x faster** than the standard Node.js baseline.
-> [See the full Benchmarks page](https://pulsur.dev/benchmarks)
-
-## 🚀 Quick Example
-
-Get a high-performance server running in seconds:
-
-```javascript
-const { HttpServer } = require('@pulsur/http-server');
-
-const server = new HttpServer({
-  port: 3000,
-  workers: 4
-});
-
-server.get('/', (req, res) => {
-  res.send({ hello: 'from rust-powered pulsur' });
-});
-
-server.start();
-```
-
-## 🛠️ Installation
-
-```bash
-npm install @pulsur/http-server
-```
-
-*Note: Requires Rust 1.75+ to build the native modules from source on some platforms.*
-
-## 📁 Repository Structure
-
-```text
-pulsur/
-├── crates/             # Rust Crate Workspace (The Engine)
-│   ├── http-server     # High-performance server core
-│   ├── gateway         # Routing and middleware
-│   └── ...            # Rate limiting, Queue, etc.
-├── packages/           # JavaScript Workspace (The SDK)
-│   ├── js-sdk          # Primary client library
-│   └── dashboard       # Next.js Management UI
-└── docs/               # Documentation site (Docusaurus)
-```
-
-## 📜 Full Documentation
-
-Visit [pulsur.dev](https://pulsur.dev) for guides, API references, and architecture details.
-
-## 🤝 Contributing
-
-We love contributors! Check out our [Contributing Guide](CONTRIBUTING.md) and join our community on [Discord](https://discord.gg/pulsur).
+Pulsur is a next-generation distributed engine that replaces heavy Node.js infrastructure with high-efficiency Rust components. It integrates **Layer 7 Load Balancing**, **Distributed Rate Limiting**, and a **Native HTTP Stack** into a single zero-dependency binary.
 
 ---
 
-Distributed under the MIT License. See `LICENSE` for more information.
+## 🚀 The Performance Leap
+In a head-to-head comparison against a standard Node.js/Express infrastructure stack, Pulsur delivered:
+
+- **+34% Higher Throughput**: Sustaining ~24,900 requests per second.
+- **-93% Memory Reduction**: Running at just **3.1MB RAM** compared to 45MB in Node.js.
+- **Superior Tail Latency**: Optimized p99 latency of **15ms**, beating Node's 17ms.
+
+| Metric | Node.js (Baseline) | Pulsur (Optimized) |
+| :--- | :--- | :--- |
+| **Peak Requests/sec** | ~18,500 | **~24,900** |
+| **Average Latency** | 4.91 ms | **3.52 ms** |
+| **p99 (Tail) Latency** | 17 ms | **15 ms** |
+| **Idle Memory (RSS)** | 32 MB | **2.8 MB** |
+
+---
+
+## 🏗️ Architecture
+Pulsur is a modular "Engine of Crates" orchestrated by the Tokio async runtime.
+
+```mermaid
+graph TD
+    Client[HTTP Client] --> GW[Pulsur Gateway]
+    GW --> RL[Token Bucket Rate Limiter]
+    RL --> LB[L7 Load Balancer]
+    LB --> B1[Backend 1]
+    LB --> B2[Backend 2]
+    
+    subgraph Rust Core
+        GW
+        RL
+        LB
+    end
+```
+
+---
+
+## 📦 Core Component Modules
+The engine is split into independent, battle-tested Rust crates:
+
+- **`http-server`**: Low-level TCP management, TLS termination, and WebSocket engine.
+- **`gateway`**: High-level orchestration, plugin system, and Request/Response lifecycle.
+- **`load-balancer`**: Advanced routing (Round Robin, Weighted, Sticky Sessions).
+- **`rate-limiter`**: Lock-free concurrent Token Bucket implementation.
+- **`circuit-breaker`**: Fault-tolerance and cascading failure prevention.
+- **`observability`**: Structured tracing (JSON) and health-check monitoring.
+
+---
+
+## 🛠️ Quick Start
+
+### Build from Source
+```bash
+# Build the optimized release binary
+cargo build --release
+
+# Run the full-stack benchmark server
+./target/release/full_stack_bench
+```
+
+### Node.js Bridge
+Pulsur provides a zero-latency bridge for JavaScript developers using NAPI-RS.
+```javascript
+const { PulsurServer } = require('@pulsur/http-server');
+
+const server = new PulsurServer({ port: 8080 });
+server.get('/', (req, res) => res.send("Powered by Rust"));
+server.listen();
+```
+
+---
+
+## 📁 Repository Map
+- `/crates`: The Rust workspace (Core Logic).
+- `/packages`: The Node.js SDK and Dashboard.
+- `/results`: Raw benchmark data and the [Final Report](results/FINAL-REPORT.md).
+
+---
+
+## 📑 Detailed Reports
+- [Final Performance Analysis](results/FINAL-REPORT.md)
+- [Codebase Architectural Review](REPORT.txt)
+- [Technical Blog Post: Node.js to Rust journey](BLOG_POST.md)
+
+---
+Distributed under the MIT License. Built for the high-performance web.
