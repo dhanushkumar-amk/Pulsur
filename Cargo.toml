@@ -2,16 +2,24 @@
 resolver = "2"
 
 members = [
-    "crates/pulsar-cli",
-    "crates/pulsar-server",
-    "crates/http-server",
-    "crates/gateway",
-    "crates/load-balancer",
-    "crates/rate-limiter",
-    "crates/queue",
-    "crates/circuit-breaker",
-    "crates/proxy",
-    "crates/observability", "crates/fundamentals",
+    # 核心服务 (Core Services)
+    "crates/core/pulsar-cli",
+    "crates/core/pulsar-server",
+    "crates/core/gateway",
+
+    # 基础引擎 (Engine/Middleware)
+    "crates/engine/http-server",
+    "crates/engine/load-balancer",
+    "crates/engine/rate-limiter",
+    "crates/engine/queue",
+    "crates/engine/circuit-breaker",
+    "crates/engine/proxy",
+
+    # 公用组件 (Shared/Utils)
+    "crates/shared/fundamentals",
+    "crates/shared/observability",
+
+    # 实验性环境 (Playground & Tests)
     "playground/tokio-deep-dive",
     "tests",
 ]
@@ -63,7 +71,6 @@ futures = "0.3"
 jsonwebtoken = "9.3"
 clap = { version = "4.5", features = ["derive"] }
 colored = "2.1"
-
 
 
 [profile.release]
