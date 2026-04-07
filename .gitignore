@@ -37,6 +37,7 @@ certs/*.pem
 .DS_Store
 *.swp
 *.swo
+.agents
 
 # --- PLAYGROUND ---
 playground/

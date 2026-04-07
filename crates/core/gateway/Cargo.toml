@@ -26,6 +26,6 @@ rand = "0.8"
 clap = { version = "4.5", features = ["derive"] }
 notify = "6.1"
 arc-swap = "1.7"
-rate_limiter = { path = "../../engine/rate-limiter" }
+rate-limiter = { path = "../../engine/rate-limiter" }
 chrono = { workspace = true }
 dashmap = "5.5"
