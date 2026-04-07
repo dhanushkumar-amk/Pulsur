@@ -22,7 +22,9 @@ use sha1::{Digest, Sha1};
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
+#[cfg(not(feature = "noop"))]
+use std::sync::Mutex as StdMutex;
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpListener;
