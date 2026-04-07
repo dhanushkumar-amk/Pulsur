@@ -22,6 +22,9 @@ tracing = { workspace = true }
 napi = { version = "2", features = ["async"] }
 napi-derive = "2"
 
+[features]
+noop = ["napi/noop"]
+
 [dev-dependencies]
 http = { workspace = true }
 proptest = "1.6"
