@@ -15,6 +15,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true }
 http_server = { path = "../../engine/http-server" }
 gateway = { path = "../gateway" }
 load-balancer = { path = "../../engine/load-balancer" }

@@ -3,6 +3,7 @@ use http_server::{HttpServer, Method, Response, Router, ServerConfig};
 use load_balancer::{Backend, BackendPool, BackendPoolConfig};
 use rate_limiter::TokenBucketRateLimiter;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -24,7 +25,9 @@ async fn main() -> anyhow::Result<()> {
     let backend_server = HttpServer::new(backend_router, ServerConfig::default());
     tokio::spawn(async move {
         // Run on 8081
-        let _ = backend_server.run("127.0.0.1:8081").await;
+        let _ = backend_server
+            .run("127.0.0.1:8081", CancellationToken::new())
+            .await;
     });
 
     // 2. Setup LB
@@ -73,7 +76,9 @@ async fn main() -> anyhow::Result<()> {
     );
 
     println!("🛰️ Pulsur Full Stack Baseline listening on 127.0.0.1:8080");
-    server.run("127.0.0.1:8080").await?;
+    server
+        .run("127.0.0.1:8080", CancellationToken::new())
+        .await?;
 
     Ok(())
 }
