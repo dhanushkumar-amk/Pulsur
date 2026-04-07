@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.5.0...v0.6.0) (2026-04-07)
+
+
+### Features
+
+* add pulsar-server crate and full-stack benchmark binary ([9c7ce51](https://github.com/dhanushkumar-amk/Pulsur/commit/9c7ce51185043125801da00d4babfc70b8ab5cee))
+* implement core gateway crate with plugin architecture and rate limiting support ([26b4d63](https://github.com/dhanushkumar-amk/Pulsur/commit/26b4d631e89335ae34f8287762f5fb5663286811))
+* implement observability crate and scaffold core engine modules with CI workflow ([4edac12](https://github.com/dhanushkumar-amk/Pulsur/commit/4edac1222f64f34c9ff45686a08be9d04bb4bd6d))
+
 ## [0.5.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.4.0...v0.5.0) (2026-04-07)
 
 
