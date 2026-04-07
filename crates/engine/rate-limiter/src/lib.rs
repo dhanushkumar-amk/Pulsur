@@ -478,8 +478,8 @@ impl SlidingWindowRateLimiter {
     }
 }
 
-#[derive(Clone)]
 #[cfg(not(feature = "noop"))]
+#[derive(Clone)]
 #[napi(object)]
 pub struct JsRateLimitResult {
     pub allowed: bool,

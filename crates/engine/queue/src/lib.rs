@@ -621,13 +621,14 @@ pub fn replay_wal_from_bytes(data: &[u8], queue: &mut Queue) -> Result<(), WalEr
     Wal::replay_reader_into_queue(&mut reader, queue)
 }
 
+#[cfg(not(feature = "noop"))]
 #[derive(Debug)]
 struct SharedQueueHandle {
     queue: std::sync::Mutex<Queue>,
 }
 
-#[derive(Clone)]
 #[cfg(not(feature = "noop"))]
+#[derive(Clone)]
 #[napi(object)]
 pub struct JsQueueJob {
     pub id: String,
@@ -656,8 +657,8 @@ impl From<Job> for JsQueueJob {
     }
 }
 
-#[derive(Clone)]
 #[cfg(not(feature = "noop"))]
+#[derive(Clone)]
 #[napi(object)]
 pub struct JsQueueStats {
     pub pending: u32,
