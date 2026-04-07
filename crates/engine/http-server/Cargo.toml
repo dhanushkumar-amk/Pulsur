@@ -34,6 +34,9 @@ rcgen = { workspace = true }
 napi = { version = "2", features = ["async"] }
 napi-derive = "2"
 
+[features]
+noop = ["napi/noop"]
+
 [[test]]
 name = "benchmark"
 path = "tests/benchmark.rs"

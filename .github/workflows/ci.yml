@@ -25,10 +25,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
         
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --features http_server/noop -- -D warnings
         
       - name: Run tests
-        run: cargo test --workspace --all-targets --all-features
+        run: cargo test --workspace --all-targets --features http_server/noop
         
       - name: Run rustfmt check
         run: cargo fmt --all -- --check
