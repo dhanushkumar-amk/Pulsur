@@ -1,6 +1,6 @@
 {
   "name": "@pulsur/http-server-darwin-x64",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "macOS x64 binary for @pulsur/http-server",
   "files": [
     "bin"
