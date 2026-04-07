@@ -26,12 +26,24 @@ yarn-error.log*
 *.swo
 .DS_Store
 
-# Logs
+# Logs and Output
 logs/
 *.log
+out.txt
+errors.txt
+build-artifacts/
+test-results/
+test_*.txt
+
+# Certificates
+certs/*.pem
+!certs/.gitkeep
+
+# Playground and Sandbox
+playground/
+temp-configs/
 
 # Coverage
 tarpaulin-report.html
 *.gcda
 *.gcno
-build_output.txt

@@ -32,8 +32,8 @@ async fn main() -> anyhow::Result<()> {
         .run_dual(
             "127.0.0.1:8080",
             "127.0.0.1:3443",
-            "crates/http-server/cert.pem",
-            "crates/http-server/key.pem",
+            "certs/cert.pem",
+            "certs/key.pem",
         )
         .await?;
 

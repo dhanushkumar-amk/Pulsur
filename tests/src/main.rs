@@ -12,7 +12,6 @@ use axum::{
 use gateway::HotReloadGateway;
 use load_balancer::{Backend, BackendPool};
 use queue::Queue;
-use futures_util::StreamExt;
 
 #[derive(Parser)]
 #[command(name = "pulsur-test")]
