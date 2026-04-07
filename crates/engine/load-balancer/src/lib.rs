@@ -693,8 +693,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_draining_backend_is_removed_from_routing() {
+    #[tokio::test]
+    async fn test_draining_backend_is_removed_from_routing() {
         let pool = Arc::new(BackendPool::new());
         let draining = Backend::new("b0", 1);
         let healthy = Backend::new("b1", 1);
