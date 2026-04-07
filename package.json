@@ -13,7 +13,7 @@
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "lint:commits": "commitlint --from=${BASE_SHA:-HEAD~1} --to=${HEAD_SHA:-HEAD}",
+    "lint:commits": "commitlint --config .config/commitlint.config.cjs --from=${BASE_SHA:-HEAD~1} --to=${HEAD_SHA:-HEAD}",
     "release:prepare-http-server": "node ./scripts/stage-npm-binary.js --component http-server --package @pulsur/http-server",
     "release:publish-packages": "npm publish ./packages/@pulsur/http-server --access public && npm publish ./packages/@pulsur/http-server-linux-x64 --access public && npm publish ./packages/@pulsur/http-server-darwin-x64 --access public && npm publish ./packages/@pulsur/http-server-darwin-arm64 --access public && npm publish ./packages/@pulsur/http-server-win32-x64 --access public"
   },

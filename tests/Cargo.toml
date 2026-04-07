@@ -4,12 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-gateway = { path = "../crates/gateway" }
-load-balancer = { path = "../crates/load-balancer" }
-rate-limiter = { path = "../crates/rate-limiter" }
-queue = { path = "../crates/queue" }
-circuit-breaker = { path = "../crates/circuit-breaker" }
-http_server = { path = "../crates/http-server" }
+# Monorepo Path-based Dependencies (Updated for new hierarchy)
+gateway = { path = "../crates/core/gateway" }
+load-balancer = { path = "../crates/engine/load-balancer" }
+rate-limiter = { path = "../crates/engine/rate-limiter" }
+queue = { path = "../crates/engine/queue" }
+circuit-breaker = { path = "../crates/engine/circuit-breaker" }
+http_server = { path = "../crates/engine/http-server" }
+
+# Standard Dependencies
 tempfile = "3.10"
 tokio = { version = "1.37", features = ["full"] }
 anyhow = "1.0"

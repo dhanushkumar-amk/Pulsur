@@ -1,0 +1,126 @@
+warning: unused import: `futures_util::StreamExt`
+  --> tests\src\main.rs:15:5
+   |
+15 | use futures_util::StreamExt;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling pulsur-test-harness v0.1.0 (C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\tests)
+warning: `pulsur-test-harness` (bin "pulsur-test-harness") generated 1 warning
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+   --> tests\tests\chaos_tests.rs:82:34
+    |
+ 82 |             let result = limiter.check_key("test_user").await;
+    |                                  ^^^^^^^^^------------- argument #2 of type `f64` is missing
+    |
+note: method defined here
+   --> crates\rate-limiter\src\lib.rs:578:18
+    |
+578 |     pub async fn check_key(
+    |                  ^^^^^^^^^
+help: provide the argument
+    |
+ 82 |             let result = limiter.check_key("test_user", /* f64 */).await;
+    |                                                       +++++++++++
+
+error[E0308]: mismatched types
+   --> tests\tests\chaos_tests.rs:103:23
+    |
+103 |         queue.enqueue(b"job-1".to_vec()).unwrap();
+    |               ------- ^^^^^^^^^^^^^^^^^ expected `Job`, found `Vec<u8>`
+    |               |
+    |               arguments to this method are incorrect
+    |
+    = note: expected struct `Job`
+               found struct `Vec<u8>`
+note: method defined here
+   --> crates\queue\src\lib.rs:537:12
+    |
+537 |     pub fn enqueue(&mut self, job: Job) -> Result<(), PersistentQueueError> {
+    |            ^^^^^^^
+
+error[E0308]: mismatched types
+   --> tests\tests\chaos_tests.rs:104:23
+    |
+104 |         queue.enqueue(b"job-2".to_vec()).unwrap();
+    |               ------- ^^^^^^^^^^^^^^^^^ expected `Job`, found `Vec<u8>`
+    |               |
+    |               arguments to this method are incorrect
+    |
+    = note: expected struct `Job`
+               found struct `Vec<u8>`
+note: method defined here
+   --> crates\queue\src\lib.rs:537:12
+    |
+537 |     pub fn enqueue(&mut self, job: Job) -> Result<(), PersistentQueueError> {
+    |            ^^^^^^^
+
+error[E0599]: no method named `peek` found for struct `PersistentQueue` in the current scope
+   --> tests\tests\chaos_tests.rs:123:51
+    |
+123 |     println!("Queue restarted. Head: {:?}", queue.peek());
+    |                                                   ^^^^ method not found in `PersistentQueue`
+
+error[E0599]: no method named `peek` found for struct `PersistentQueue` in the current scope
+   --> tests\tests\chaos_tests.rs:124:19
+    |
+124 |     assert!(queue.peek().is_some());
+    |                   ^^^^ method not found in `PersistentQueue`
+
+error[E0277]: the trait bound `String: From<CircuitBreakerConfig>` is not satisfied
+   --> tests\tests\chaos_tests.rs:138:38
+    |
+138 |     let mut cb = CircuitBreaker::new(config);
+    |                  ------------------- ^^^^^^ the trait `From<CircuitBreakerConfig>` is not implemented for `String`
+    |                  |
+    |                  required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `From<T>`:
+              `String` implements `From<&String>`
+              `String` implements `From<&mut str>`
+              `String` implements `From<&str>`
+              `String` implements `From<Box<str>>`
+              `String` implements `From<Cow<'_, str>>`
+              `String` implements `From<char>`
+              `String` implements `From<cron::schedule::Schedule>`
+              `String` implements `From<iri_string::template::string::owned::UriTemplateString>`
+            and 8 others
+    = note: required for `CircuitBreakerConfig` to implement `Into<String>`
+note: required by a bound in `CircuitBreaker::new`
+   --> crates\circuit-breaker\src\lib.rs:204:27
+    |
+204 |     pub fn new(name: impl Into<String>) -> Self {
+    |                           ^^^^^^^^^^^^ required by this bound in `CircuitBreaker::new`
+
+error[E0308]: mismatched types
+   --> tests\tests\chaos_tests.rs:167:19
+    |
+167 |     queue.enqueue(b"valid-job").unwrap();
+    |           ------- ^^^^^^^^^^^^ expected `Job`, found `&[u8; 9]`
+    |           |
+    |           arguments to this method are incorrect
+    |
+note: method defined here
+   --> crates\queue\src\lib.rs:537:12
+    |
+537 |     pub fn enqueue(&mut self, job: Job) -> Result<(), PersistentQueueError> {
+    |            ^^^^^^^
+
+error[E0308]: mismatched types
+   --> tests\tests\chaos_tests.rs:174:32
+    |
+174 |     let result = queue.enqueue(b"failing-job");
+    |                        ------- ^^^^^^^^^^^^^^ expected `Job`, found `&[u8; 11]`
+    |                        |
+    |                        arguments to this method are incorrect
+    |
+note: method defined here
+   --> crates\queue\src\lib.rs:537:12
+    |
+537 |     pub fn enqueue(&mut self, job: Job) -> Result<(), PersistentQueueError> {
+    |            ^^^^^^^
+
+Some errors have detailed explanations: E0061, E0277, E0308, E0599.
+For more information about an error, try `rustc --explain E0061`.
+error: could not compile `pulsur-test-harness` (test "chaos_tests") due to 8 previous errors

@@ -1,0 +1,220 @@
+    Checking pulsur-test-harness v0.1.0 (C:\Users\Star\OneDrive\Documents\Important\Projects\Rust NPM Package\tests)
+error[E0432]: unresolved import `circuit_breaker::Config`
+  --> tests\tests\chaos_tests.rs:10:39
+   |
+10 | use circuit_breaker::{CircuitBreaker, Config as CbConfig};
+   |                                       ^^^^^^^^^^^^^^^^^^ no `Config` in the root
+
+error[E0603]: struct `State` is private
+   --> tests\tests\chaos_tests.rs:148:51
+    |
+148 |     assert!(matches!(cb.state(), circuit_breaker::State::Open));
+    |                                                   ^^^^^ private struct
+    |
+note: the struct `State` is defined here
+   --> crates\circuit-breaker\src\lib.rs:7:21
+    |
+  7 |     extract::{Path, State},
+    |                     ^^^^^
+help: consider importing this struct instead
+    |
+148 -     assert!(matches!(cb.state(), circuit_breaker::State::Open));
+148 +     assert!(matches!(cb.state(), axum::extract::State::Open));
+    |
+help: import `State` directly
+    |
+148 -     assert!(matches!(cb.state(), circuit_breaker::State::Open));
+148 +     assert!(matches!(cb.state(), axum::extract::state::State));
+    |
+
+warning: unused imports: `AtomicBool` and `Ordering`
+ --> tests\tests\chaos_tests.rs:2:25
+  |
+2 | use std::sync::atomic::{AtomicBool, Ordering};
+  |                         ^^^^^^^^^^  ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `TokenBucketRateLimiter`
+ --> tests\tests\chaos_tests.rs:8:55
+  |
+8 | use rate_limiter::{DistributedTokenBucketRateLimiter, TokenBucketRateLimiter};
+  |                                                       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `WalEvent`
+ --> tests\tests\chaos_tests.rs:9:30
+  |
+9 | use queue::{PersistentQueue, WalEvent};
+  |                              ^^^^^^^^
+
+error[E0624]: method `backends_snapshot` is private
+   --> tests\tests\chaos_tests.rs:41:29
+    |
+ 41 |         let backends = pool.backends_snapshot();
+    |                             ^^^^^^^^^^^^^^^^^ private method
+    |
+   ::: crates\load-balancer\src\lib.rs:532:5
+    |
+532 |     fn backends_snapshot(&self) -> Vec<Arc<Backend>> {
+    |     ------------------------------------------------ private method defined here
+
+error[E0308]: mismatched types
+   --> tests\tests\chaos_tests.rs:75:69
+    |
+ 75 |     let limiter = DistributedTokenBucketRateLimiter::new(redis_url, 10, 1.0);
+    |                   --------------------------------------            ^^ expected `f64`, found integer
+    |                   |
+    |                   arguments to this function are incorrect
+    |
+note: associated function defined here
+   --> crates\rate-limiter\src\lib.rs:558:18
+    |
+558 |     pub async fn new(
+    |                  ^^^
+help: use a float literal
+    |
+ 75 |     let limiter = DistributedTokenBucketRateLimiter::new(redis_url, 10.0, 1.0);
+    |                                                                       ++
+
+error[E0599]: no method named `check_key` found for opaque type `impl Future<Output = Result<DistributedTokenBucketRateLimiter, RateLimiterError>>` in the current scope
+  --> tests\tests\chaos_tests.rs:79:26
+   |
+79 |     let result = limiter.check_key("test_user").await;
+   |                          ^^^^^^^^^ method not found in `impl Future<Output = Result<DistributedTokenBucketRateLimiter, RateLimiterError>>`
+
+error[E0282]: type annotations needed
+  --> tests\tests\chaos_tests.rs:79:9
+   |
+79 |     let result = limiter.check_key("test_user").await;
+   |         ^^^^^^
+...
+82 |     assert!(result.is_ok());
+   |             ------ type must be known at this point
+   |
+help: consider giving `result` an explicit type
+   |
+79 |     let result: /* Type */ = limiter.check_key("test_user").await;
+   |               ++++++++++++
+
+error[E0599]: no function or associated item named `new` found for struct `PersistentQueue` in the current scope
+   --> tests\tests\chaos_tests.rs:95:42
+    |
+ 95 |         let mut queue = PersistentQueue::new(test_dir.path().to_str().unwrap()).unwrap();
+    |                                          ^^^ function or associated item not found in `PersistentQueue`
+    |
+note: if you're trying to build a new `PersistentQueue` consider using one of the following associated functions:
+      PersistentQueue::open
+      PersistentQueue::open_with_max_bytes
+   --> crates\queue\src\lib.rs:519:5
+    |
+519 |     pub fn open(dir: impl AsRef<Path>) -> Result<Self, WalError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+523 |     pub fn open_with_max_bytes(dir: impl AsRef<Path>, max_bytes: u64) -> Result<Self, WalError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no function or associated item named `new` found for struct `PersistentQueue` in the current scope
+   --> tests\tests\chaos_tests.rs:114:34
+    |
+114 |     let queue = PersistentQueue::new(test_dir.path().to_str().unwrap()).unwrap();
+    |                                  ^^^ function or associated item not found in `PersistentQueue`
+    |
+note: if you're trying to build a new `PersistentQueue` consider using one of the following associated functions:
+      PersistentQueue::open
+      PersistentQueue::open_with_max_bytes
+   --> crates\queue\src\lib.rs:519:5
+    |
+519 |     pub fn open(dir: impl AsRef<Path>) -> Result<Self, WalError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+523 |     pub fn open_with_max_bytes(dir: impl AsRef<Path>, max_bytes: u64) -> Result<Self, WalError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0277]: expected a `FnOnce()` closure, found `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+   --> tests\tests\chaos_tests.rs:140:68
+    |
+140 |           let res = cb.call_with_timeout(Duration::from_millis(100), async {
+    |  ______________________-----------------_____________________________^
+    | |                      |
+    | |                      required by a bound introduced by this call
+141 | |             sleep(Duration::from_millis(500)).await;
+142 | |             Ok::<(), &str>(())
+143 | |         }).await;
+    | |_________^ expected an `FnOnce()` closure, found `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+    |
+    = help: the trait `FnOnce()` is not implemented for `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+    = note: wrap the `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}` in a closure with no arguments: `|| { /* code */ }`
+note: required by a bound in `CircuitBreaker::call_with_timeout`
+   --> crates\circuit-breaker\src\lib.rs:265:12
+    |
+259 |     pub async fn call_with_timeout<F, Fut, T>(
+    |                  ----------------- required by a bound in this associated function
+...
+265 |         F: FnOnce() -> Fut,
+    |            ^^^^^^^^^^^^^^^ required by this bound in `CircuitBreaker::call_with_timeout`
+
+error[E0277]: expected a `FnOnce()` closure, found `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+   --> tests\tests\chaos_tests.rs:140:19
+    |
+140 |           let res = cb.call_with_timeout(Duration::from_millis(100), async {
+    |  ___________________^
+141 | |             sleep(Duration::from_millis(500)).await;
+142 | |             Ok::<(), &str>(())
+143 | |         }).await;
+    | |__________^ expected an `FnOnce()` closure, found `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+    |
+    = help: the trait `FnOnce()` is not implemented for `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+    = note: wrap the `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}` in a closure with no arguments: `|| { /* code */ }`
+note: required by a bound in `CircuitBreaker::call_with_timeout`
+   --> crates\circuit-breaker\src\lib.rs:265:12
+    |
+259 |     pub async fn call_with_timeout<F, Fut, T>(
+    |                  ----------------- required by a bound in this associated function
+...
+265 |         F: FnOnce() -> Fut,
+    |            ^^^^^^^^^^^^^^^ required by this bound in `CircuitBreaker::call_with_timeout`
+
+error[E0277]: expected a `FnOnce()` closure, found `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+   --> tests\tests\chaos_tests.rs:143:12
+    |
+143 |         }).await;
+    |            ^^^^^ expected an `FnOnce()` closure, found `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+    |
+    = help: the trait `FnOnce()` is not implemented for `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}`
+    = note: wrap the `{async block@tests\tests\chaos_tests.rs:140:68: 140:73}` in a closure with no arguments: `|| { /* code */ }`
+note: required by a bound in `CircuitBreaker::call_with_timeout`
+   --> crates\circuit-breaker\src\lib.rs:265:12
+    |
+259 |     pub async fn call_with_timeout<F, Fut, T>(
+    |                  ----------------- required by a bound in this associated function
+...
+265 |         F: FnOnce() -> Fut,
+    |            ^^^^^^^^^^^^^^^ required by this bound in `CircuitBreaker::call_with_timeout`
+
+error[E0599]: no associated item named `Open` found for struct `axum::extract::state::State<_>` in the current scope
+   --> tests\tests\chaos_tests.rs:148:58
+    |
+148 |     assert!(matches!(cb.state(), circuit_breaker::State::Open));
+    |                                                          ^^^^ associated item not found in `axum::extract::state::State<_>`
+
+error[E0599]: no function or associated item named `new` found for struct `PersistentQueue` in the current scope
+   --> tests\tests\chaos_tests.rs:162:38
+    |
+162 |     let mut queue = PersistentQueue::new(test_dir.path().to_str().unwrap()).unwrap();
+    |                                      ^^^ function or associated item not found in `PersistentQueue`
+    |
+note: if you're trying to build a new `PersistentQueue` consider using one of the following associated functions:
+      PersistentQueue::open
+      PersistentQueue::open_with_max_bytes
+   --> crates\queue\src\lib.rs:519:5
+    |
+519 |     pub fn open(dir: impl AsRef<Path>) -> Result<Self, WalError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+523 |     pub fn open_with_max_bytes(dir: impl AsRef<Path>, max_bytes: u64) -> Result<Self, WalError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some errors have detailed explanations: E0277, E0282, E0308, E0432, E0599, E0603, E0624.
+For more information about an error, try `rustc --explain E0277`.
+warning: `pulsur-test-harness` (test "chaos_tests") generated 3 warnings
+error: could not compile `pulsur-test-harness` (test "chaos_tests") due to 13 previous errors; 3 warnings emitted

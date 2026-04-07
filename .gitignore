@@ -1,9 +1,20 @@
-# Rust
+# --- RUST & BUILD ---
 target/
 **/*.rs.bk
-Cargo.lock
+Cargo.lock (if you want lock-free, but here we track it)
+!Cargo.lock
 
-# Node / JS
+# --- SYSTEM & INTERNAL (IGNORE CONTENTS) ---
+internal/audits/
+internal/build-artifacts/
+internal/test-results/
+internal/temp-configs/
+internal/logs/
+internal/results/
+internal/*.log
+internal/*.txt
+
+# --- NODE / JS ---
 node_modules/
 dist/
 .next/
@@ -13,37 +24,28 @@ build/
 packages/@pulsur/**/bin/
 packages/@pulsur/http-server/binary-path.json
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+
+# --- SECRETS & CONFIG ---
 .env*
 !.env.example
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-
-# Logs and Output
-logs/
-*.log
-out.txt
-errors.txt
-build-artifacts/
-test-results/
-test_*.txt
-
-# Certificates
 certs/*.pem
 !certs/.gitkeep
 
-# Playground and Sandbox
-playground/
-temp-configs/
+# --- IDE & SYSTEM ---
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
 
-# Coverage
+# --- PLAYGROUND ---
+playground/
+!playground/**/src/
+!playground/**/Cargo.toml
+!playground/**/.gitkeep
+playground/target/
+
+# --- COVERAGE ---
 tarpaulin-report.html
 *.gcda
 *.gcno
