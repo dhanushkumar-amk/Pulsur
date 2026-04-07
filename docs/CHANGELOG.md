@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.4.0...v0.5.0) (2026-04-07)
+
+
+### Features
+
+* implement persistent job queue system and add conditional napi build configurations ([77c5b93](https://github.com/dhanushkumar-amk/Pulsur/commit/77c5b932fd26712a6b03bf2d8506f4b34f637047))
+* implement rate limiter, http server, and queue modules in engine crate ([59eccd6](https://github.com/dhanushkumar-amk/Pulsur/commit/59eccd63fc77b378e1a98f50b521ed3bd40eba99))
+* implement rate-limiter, http-server, and queue engine modules ([3be6fb7](https://github.com/dhanushkumar-amk/Pulsur/commit/3be6fb7e88513ae58123447e6e77c0473f5e54a8))
+* implement token bucket and sliding window rate limiting algorithms with multi-tier support ([bfe549e](https://github.com/dhanushkumar-amk/Pulsur/commit/bfe549e99ceaf70de99d715468bb4ce22f28d1cc))
+* implement token bucket and sliding window rate limiting engines with multi-tier support ([13a7db4](https://github.com/dhanushkumar-amk/Pulsur/commit/13a7db4c596a80562e77a6d6c755a77bc78f680f))
+* initialize http-server crate within engine workspace ([f64fcb7](https://github.com/dhanushkumar-amk/Pulsur/commit/f64fcb7bca89a10f8276da86c88408ac52381792))
+
 ## [0.4.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.3.0...v0.4.0) (2026-04-07)
 
 
