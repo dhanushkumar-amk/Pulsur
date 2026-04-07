@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.2.0...v0.3.0) (2026-04-07)
+
+
+### Features
+
+* initialize http-server crate, add npm package configuration, and implement CI workflow ([e3dd8a5](https://github.com/dhanushkumar-amk/Pulsur/commit/e3dd8a5f03aa84032791d068eafd2369e439f9be))
+
 ## [0.2.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.1.0...v0.2.0) (2026-04-07)
 
 
