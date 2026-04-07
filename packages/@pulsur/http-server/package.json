@@ -1,6 +1,6 @@
 {
   "name": "@pulsur/http-server",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Pulsur HTTP server binary loader and JS launcher",
   "main": "index.js",
   "files": [

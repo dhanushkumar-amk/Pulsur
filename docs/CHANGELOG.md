@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.3.0...v0.4.0) (2026-04-07)
+
+
+### Features
+
+* initialize queue and rate-limiter crates and add CI workflow configuration ([9dd88fb](https://github.com/dhanushkumar-amk/Pulsur/commit/9dd88fb922563f53654dcbd4c136826d6caf3b83))
+* scaffold http-server package and update workspace dependencies to version 0.3.0 ([b18575a](https://github.com/dhanushkumar-amk/Pulsur/commit/b18575a6ffa3df7f2d1dcd993d44b74e12f8e9c0))
+
 ## [0.3.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.2.0...v0.3.0) (2026-04-07)
 
 
