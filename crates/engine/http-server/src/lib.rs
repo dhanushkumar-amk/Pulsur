@@ -1218,10 +1218,10 @@ impl JsServer {
     }
 
     fn register_route(&self, method: Method, path: String, handler: napi::JsFunction) -> napi::Result<()> {
-        use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+        use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 
         let tsfn: ThreadsafeFunction<Request, ErrorStrategy::Fatal> = handler
-            .create_threadsafe_function(0, |ctx| {
+            .create_threadsafe_function(0, |ctx: ThreadSafeCallContext<Request>| {
                 let req = ctx.value;
                 let js_req = JsRequest {
                     method: format!("{:?}", req.method),

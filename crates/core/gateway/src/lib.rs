@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 pub mod auth;
@@ -699,7 +700,7 @@ impl HotReloadGateway {
             "Pulsar Gateway [Phase 15] listening on http://{}",
             listen_addr
         );
-        server.run(&listen_addr).await?;
+        server.run(&listen_addr, CancellationToken::new()).await?;
 
         Ok(())
     }

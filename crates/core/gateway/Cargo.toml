@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 http_server = { path = "../../engine/http-server" }
 tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true }
 http = { workspace = true }
 futures = { workspace = true }
 reqwest = { version = "0.12", features = ["json", "stream"] }
