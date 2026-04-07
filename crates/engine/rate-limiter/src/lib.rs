@@ -10,6 +10,7 @@ use axum::{
     Json, Router,
 };
 use dashmap::DashMap;
+#[cfg(not(feature = "noop"))]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -488,6 +489,7 @@ pub struct JsRateLimitResult {
     pub reset_after_secs: u32,
 }
 
+#[cfg(not(feature = "noop"))]
 impl From<RateLimitStatus> for JsRateLimitResult {
     fn from(value: RateLimitStatus) -> Self {
         Self {

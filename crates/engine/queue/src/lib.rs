@@ -12,6 +12,7 @@ use axum::{
     Json, Router,
 };
 use chrono::{DateTime, Utc};
+#[cfg(not(feature = "noop"))]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

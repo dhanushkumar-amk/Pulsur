@@ -15,6 +15,7 @@
 
 use base64::Engine;
 use futures::future::BoxFuture;
+#[cfg(not(feature = "noop"))]
 use napi_derive::napi;
 use serde::de::DeserializeOwned;
 use sha1::{Digest, Sha1};
