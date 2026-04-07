@@ -1250,7 +1250,7 @@ mod proptests {
             prop_assert!(bucket.remaining() <= capacity);
 
             // Check that we refilled approximately the right amount
-            let expected_refill = (wait_time_ms as f64 / 1000.0) * refill_rate;
+            let expected_refill = ((wait_time_ms as f64 / 1000.0) * refill_rate).min(capacity);
             let actual_refill = bucket.remaining();
             prop_assert!(actual_refill >= expected_refill - 0.1);
         }
