@@ -5,7 +5,7 @@
     ".": {
       "component": "pulsur",
       "include-component-in-tag": false,
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "docs/CHANGELOG.md",
       "extra-files": [
         "Cargo.toml",
         "package.json",
