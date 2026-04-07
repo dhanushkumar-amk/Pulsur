@@ -1,9 +1,15 @@
 {
-  "name": "js-sdk",
+  "name": "@pulsur/js-sdk",
   "version": "0.6.0",
   "description": "Pulsur JS SDK and Node.js bridge",
   "main": "index.js",
   "types": "index.d.ts",
+  "files": [
+    "errors.js",
+    "index.d.ts",
+    "index.js",
+    "native.js"
+  ],
   "scripts": {
     "test": "node --test"
   },
@@ -11,7 +17,26 @@
     "debug": "^4.4.1",
     "ws": "^8.18.0"
   },
-  "keywords": [],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pulsur",
+    "rust",
+    "sdk",
+    "http",
+    "queue",
+    "rate-limiter"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dhanushkumar-amk/Pulsur.git",
+    "directory": "packages/js-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/dhanushkumar-amk/Pulsur/issues"
+  },
+  "homepage": "https://github.com/dhanushkumar-amk/Pulsur#readme",
   "author": "",
-  "license": "ISC"
+  "license": "MIT"
 }

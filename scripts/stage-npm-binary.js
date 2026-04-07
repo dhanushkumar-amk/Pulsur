@@ -11,8 +11,8 @@ const COMPONENTS = {
     packageName: "@pulsur/http-server",
     binaryBaseName: "pulsur-http-server",
     rustBinaryName: {
-      win32: "http_server.exe",
-      default: "http_server",
+      win32: "pulsar-http-server.exe",
+      default: "pulsar-http-server",
     },
     platforms: {
       "linux-x64": {

@@ -6,7 +6,7 @@ description: Install Pulsur locally, run the JS bridge, and verify a real respon
 
 # Getting Started In 5 Minutes
 
-This guide uses the current local repo state and the JS SDK bridge. It gives you a working server, a rate limiter, and a queue example without requiring a full cross-platform publish first.
+This guide shows both paths: using the published `@pulsur/js-sdk` package in an app, or running the same examples from the local repository during development.
 
 ## Prerequisites
 
@@ -16,7 +16,13 @@ This guide uses the current local repo state and the JS SDK bridge. It gives you
 
 ## 1. Install dependencies
 
-From the repository root:
+For an app that consumes the published SDK:
+
+```bash
+npm install @pulsur/js-sdk
+```
+
+For development from this repository root:
 
 ```bash
 npm install
@@ -33,7 +39,7 @@ node ./docs/examples/getting-started.js
 
 What it does:
 
-- creates a Pulsur server through `packages/js-sdk`
+- creates a Pulsur server through `@pulsur/js-sdk`
 - listens on a local port
 - fetches `/health`
 - prints the JSON response
@@ -94,7 +100,7 @@ console.log(getBinaryPath());
 ## Minimal hello world
 
 ```js
-const { createServer } = require("../../packages/js-sdk");
+const { createServer } = require("@pulsur/js-sdk");
 
 async function main() {
   const server = createServer();

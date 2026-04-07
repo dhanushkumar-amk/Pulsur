@@ -78,8 +78,8 @@ Use `@pulsur/http-server` when you want:
 - a production-facing launcher flow
 - platform-specific npm distribution
 
-Use `packages/js-sdk` when you want:
+Use `@pulsur/js-sdk` when you want:
 
-- local development against the repo
+- an installable npm SDK for Node.js apps
 - fallback behavior without a published binary
 - access to queue and limiter helpers in one place

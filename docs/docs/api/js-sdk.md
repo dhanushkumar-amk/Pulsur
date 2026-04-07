@@ -1,11 +1,11 @@
 ---
 title: JS SDK API Reference
-description: API reference for the current JS bridge in packages/js-sdk.
+description: API reference for the published @pulsur/js-sdk package.
 ---
 
 # JS SDK API Reference
 
-This page documents the API currently exposed by `packages/js-sdk/index.js` and `packages/js-sdk/index.d.ts`.
+This page documents the API currently exposed by `@pulsur/js-sdk`, sourced from `packages/js-sdk/index.js` and `packages/js-sdk/index.d.ts`.
 
 ## Entry points
 
@@ -26,7 +26,7 @@ const {
   PulsurTimeoutError,
   PulsurRateLimitError,
   PulsurNativeBindingError,
-} = require("../../packages/js-sdk");
+} = require("@pulsur/js-sdk");
 ```
 
 ## `createServer(): PulsurServer`

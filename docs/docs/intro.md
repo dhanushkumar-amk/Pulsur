@@ -16,7 +16,7 @@ This docs site is organized around two goals:
 ## What exists in this repo today
 
 - A Rust workspace with crates for HTTP serving, gateway logic, load balancing, rate limiting, queueing, proxying, circuit breaking, and observability
-- A Node-facing JS SDK in `packages/js-sdk` that wraps native bindings when present and falls back to pure Node implementations when they are not
+- A Node-facing JS SDK published as `@pulsur/js-sdk` that wraps native bindings when present and falls back to pure Node implementations when they are not
 - npm packaging for the published HTTP server launcher in `packages/@pulsur/http-server`
 - Release automation for versioning and packaging via GitHub Actions
 
