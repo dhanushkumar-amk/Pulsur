@@ -30,7 +30,7 @@ edition = "2021"
 authors = ["pulsar Maintainers"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/pulsar/pulsar"
+repository = "https://github.com/dhanushkumar-amk/Pulsur"
 
 [workspace.dependencies]
 # Async Runtime

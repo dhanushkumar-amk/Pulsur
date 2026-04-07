@@ -40,11 +40,9 @@ certs/*.pem
 .agents
 
 # --- PLAYGROUND ---
-playground/
-!playground/**/src/
-!playground/**/Cargo.toml
-!playground/**/.gitkeep
-playground/target/
+playground/**/target/
+playground/**/bin/
+# Do not ignore the directory itself or its source/config files
 
 # --- COVERAGE ---
 tarpaulin-report.html
