@@ -21,3 +21,6 @@ load-balancer = { path = "../../engine/load-balancer" }
 rate-limiter = { path = "../../engine/rate-limiter" }
 futures = { workspace = true }
 dotenvy = { workspace = true }
+
+[features]
+noop = ["http_server/noop", "gateway/noop", "rate-limiter/noop"]

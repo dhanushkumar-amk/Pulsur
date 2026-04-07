@@ -29,3 +29,6 @@ arc-swap = "1.7"
 rate-limiter = { path = "../../engine/rate-limiter" }
 chrono = { workspace = true }
 dashmap = "5.5"
+
+[features]
+noop = ["http_server/noop", "rate-limiter/noop"]

@@ -28,3 +28,6 @@ futures = "0.3"
 futures-util = "0.3"
 uuid = { version = "1.8", features = ["v4"] }
 chrono = "0.4"
+
+[features]
+noop = ["gateway/noop", "rate-limiter/noop", "queue/noop", "http_server/noop"]
