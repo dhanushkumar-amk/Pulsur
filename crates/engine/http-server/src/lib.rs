@@ -987,17 +987,20 @@ fn compute_ws_accept(key: &str) -> String {
     base64::engine::general_purpose::STANDARD.encode(hasher.finalize())
 }
 
+#[cfg(not(feature = "noop"))]
 struct BridgeServerState {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     task: Option<tokio::task::JoinHandle<()>>,
     port: Option<u16>,
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 pub struct JsServer {
     state: Arc<StdMutex<BridgeServerState>>,
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 impl JsServer {
     #[napi(constructor)]
@@ -1099,12 +1102,14 @@ impl JsServer {
     }
 }
 
+#[cfg(not(feature = "noop"))]
 impl Default for JsServer {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 pub fn create_server() -> JsServer {
     JsServer::new()

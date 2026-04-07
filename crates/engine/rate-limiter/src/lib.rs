@@ -478,6 +478,7 @@ impl SlidingWindowRateLimiter {
 }
 
 #[derive(Clone)]
+#[cfg(not(feature = "noop"))]
 #[napi(object)]
 pub struct JsRateLimitResult {
     pub allowed: bool,
@@ -499,11 +500,13 @@ impl From<RateLimitStatus> for JsRateLimitResult {
     }
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 pub struct JsSlidingWindowLimiter {
     inner: Arc<SlidingWindowRateLimiter>,
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 impl JsSlidingWindowLimiter {
     #[napi(factory)]
@@ -533,6 +536,7 @@ impl JsSlidingWindowLimiter {
     }
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 pub fn create_limiter(max_requests: u32, window_ms: u32) -> napi::Result<JsSlidingWindowLimiter> {
     JsSlidingWindowLimiter::create_limiter(max_requests, window_ms)

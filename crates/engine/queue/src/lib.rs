@@ -626,6 +626,7 @@ struct SharedQueueHandle {
 }
 
 #[derive(Clone)]
+#[cfg(not(feature = "noop"))]
 #[napi(object)]
 pub struct JsQueueJob {
     pub id: String,
@@ -638,6 +639,7 @@ pub struct JsQueueJob {
     pub scheduled_at: Option<String>,
 }
 
+#[cfg(not(feature = "noop"))]
 impl From<Job> for JsQueueJob {
     fn from(value: Job) -> Self {
         Self {
@@ -654,6 +656,7 @@ impl From<Job> for JsQueueJob {
 }
 
 #[derive(Clone)]
+#[cfg(not(feature = "noop"))]
 #[napi(object)]
 pub struct JsQueueStats {
     pub pending: u32,
@@ -663,11 +666,13 @@ pub struct JsQueueStats {
     pub dead_letter: u32,
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 pub struct JsQueue {
     inner: Arc<SharedQueueHandle>,
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 impl JsQueue {
     #[napi(constructor)]
@@ -779,12 +784,14 @@ impl Default for JsQueue {
     }
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 pub struct JsWorker {
     inner: Arc<SharedQueueHandle>,
     queue: Option<String>,
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 impl JsWorker {
     #[napi]
