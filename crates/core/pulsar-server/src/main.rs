@@ -1,6 +1,6 @@
 use anyhow::Result;
 use http_server::{HttpServer, ServerConfig};
-use pulsar_server::{AppConfig, build_router};
+use pulsar_server::{build_router, AppConfig};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -33,7 +33,11 @@ async fn main() -> Result<()> {
     );
 
     // 4. Bind and Run Dual-Stack Ports (Secure By Default)
-    info!("Binding to HTTP: {} | HTTPS: {}", config.http_addr(), config.https_addr());
+    info!(
+        "Binding to HTTP: {} | HTTPS: {}",
+        config.http_addr(),
+        config.https_addr()
+    );
     server
         .run_dual(
             &config.http_addr(),

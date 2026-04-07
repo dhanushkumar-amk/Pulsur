@@ -1,5 +1,5 @@
-use gateway::HotReloadGateway;
 use clap::Parser;
+use gateway::HotReloadGateway;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -28,12 +28,12 @@ async fn main() -> anyhow::Result<()> {
 
     // 2. Parse CLI Arguments
     let args = Args::parse();
- 
+
     match args.command {
         Commands::Start { config } => {
             HotReloadGateway::start(&config).await?;
         }
     }
- 
+
     Ok(())
 }

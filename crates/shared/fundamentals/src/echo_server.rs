@@ -40,7 +40,7 @@ fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use std::io::{Read, Write};
-    use std::net::{TcpStream, TcpListener};
+    use std::net::{TcpListener, TcpStream};
     use std::thread;
     use std::time::Duration;
 
@@ -49,7 +49,7 @@ mod tests {
         // Start server in background thread on a dynamic port
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
-        
+
         thread::spawn(move || {
             for mut stream in listener.incoming().flatten() {
                 let mut buffer = [0; 512];
@@ -74,31 +74,33 @@ mod tests {
 
         assert_eq!(&response, message);
     }
-    
+
     #[test]
     fn test_echo_multiple_messages() {
-         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-         let addr = listener.local_addr().unwrap();
-         
-         thread::spawn(move || {
-             for mut stream in listener.incoming().flatten() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
                 let mut buffer = [0; 512];
                 while let Ok(n) = stream.read(&mut buffer) {
-                    if n == 0 { break; }
+                    if n == 0 {
+                        break;
+                    }
                     let _ = stream.write_all(&buffer[..n]);
                 }
-             }
-         });
+            }
+        });
 
-         thread::sleep(Duration::from_millis(50));
-         let mut client = TcpStream::connect(addr).unwrap();
-         
-         for i in 0..5 {
-             let msg = format!("msg {}", i);
-             client.write_all(msg.as_bytes()).unwrap();
-             let mut res = vec![0; msg.len()];
-             client.read_exact(&mut res).unwrap();
-             assert_eq!(res, msg.as_bytes());
-         }
+        thread::sleep(Duration::from_millis(50));
+        let mut client = TcpStream::connect(addr).unwrap();
+
+        for i in 0..5 {
+            let msg = format!("msg {}", i);
+            client.write_all(msg.as_bytes()).unwrap();
+            let mut res = vec![0; msg.len()];
+            client.read_exact(&mut res).unwrap();
+            assert_eq!(res, msg.as_bytes());
+        }
     }
 }

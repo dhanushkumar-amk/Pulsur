@@ -6,7 +6,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration as StdDuration, Instant};
 
-use axum::{extract::{Path as AxumPath, State}, routing::get, Json, Router};
+use axum::{
+    extract::{Path as AxumPath, State},
+    routing::get,
+    Json, Router,
+};
 use chrono::{DateTime, Utc};
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
@@ -140,7 +144,10 @@ impl Queue {
     }
 
     pub fn dequeue_for_queue(&mut self, queue_name: &str) -> Option<Job> {
-        let index = self.pending.iter().position(|job| job.queue == queue_name)?;
+        let index = self
+            .pending
+            .iter()
+            .position(|job| job.queue == queue_name)?;
         let job = self.pending.remove(index)?;
         Some(self.move_pending_job_to_processing(job))
     }
@@ -398,7 +405,10 @@ impl Wal {
         Self::replay_reader_into_queue(&mut reader, queue)
     }
 
-    pub fn replay_reader_into_queue<R: Read>(reader: &mut R, queue: &mut Queue) -> Result<(), WalError> {
+    pub fn replay_reader_into_queue<R: Read>(
+        reader: &mut R,
+        queue: &mut Queue,
+    ) -> Result<(), WalError> {
         loop {
             let mut len_buf = [0u8; 4];
             match reader.read_exact(&mut len_buf) {
@@ -412,8 +422,7 @@ impl Wal {
             match reader.read_exact(&mut payload) {
                 Ok(()) => {
                     let event: WalEvent = bincode::deserialize(&payload)?;
-                    if let Err(_err) = queue.apply_event(event) {
-                    }
+                    if let Err(_err) = queue.apply_event(event) {}
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::UnexpectedEof => break,
                 Err(err) => return Err(WalError::Io(err)),
@@ -583,7 +592,11 @@ impl PersistentQueue {
         Ok(job)
     }
 
-    pub fn nack(&mut self, id: Uuid, reason: impl Into<String>) -> Result<Job, PersistentQueueError> {
+    pub fn nack(
+        &mut self,
+        id: Uuid,
+        reason: impl Into<String>,
+    ) -> Result<Job, PersistentQueueError> {
         let reason = reason.into();
         let event = WalEvent::Nack(id, reason.clone());
         self.wal.append(&event)?;
@@ -595,6 +608,8 @@ impl PersistentQueue {
     pub fn compact(&mut self) -> Result<(), WalError> {
         self.wal.write_snapshot(&self.queue)?;
         self.wal.delete_old_segments()?;
+        // Truncate active WAL since its state is now in the snapshot
+        File::create(&self.wal.active_path)?.sync_all()?;
         Ok(())
     }
 }
@@ -688,7 +703,12 @@ impl JsQueue {
         let run_at = DateTime::parse_from_rfc3339(&run_at_rfc3339)
             .map_err(|err| napi::Error::from_reason(err.to_string()))?
             .with_timezone(&Utc);
-        let job = Job::scheduled(queue, payload_json.into_bytes(), max_attempts.unwrap_or(3), run_at);
+        let job = Job::scheduled(
+            queue,
+            payload_json.into_bytes(),
+            max_attempts.unwrap_or(3),
+            run_at,
+        );
         let mut guard = self.lock_queue()?;
         guard.enqueue(job.clone());
         Ok(job.into())
@@ -1026,12 +1046,7 @@ impl QueueRuntime {
         }
     }
 
-    async fn register_processing(
-        &self,
-        queue: &str,
-        job_id: Uuid,
-        permit: OwnedSemaphorePermit,
-    ) {
+    async fn register_processing(&self, queue: &str, job_id: Uuid, permit: OwnedSemaphorePermit) {
         self.active_jobs.lock().await.insert(
             job_id,
             ActiveJob {
@@ -1068,13 +1083,23 @@ impl QueueRuntime {
         prune_completions(&mut completions);
         let completed_in_window = completions
             .iter()
-            .filter(|(ts, name)| name == queue_name && now.duration_since(*ts) <= StdDuration::from_secs(1))
+            .filter(|(ts, name)| {
+                name == queue_name && now.duration_since(*ts) <= StdDuration::from_secs(1)
+            })
             .count();
 
         QueueStatsView {
             queue: queue_name.to_string(),
-            pending: queue.pending.iter().filter(|job| job.queue == queue_name).count(),
-            processing: queue.processing.values().filter(|job| job.queue == queue_name).count(),
+            pending: queue
+                .pending
+                .iter()
+                .filter(|job| job.queue == queue_name)
+                .count(),
+            processing: queue
+                .processing
+                .values()
+                .filter(|job| job.queue == queue_name)
+                .count(),
             failed: queue
                 .dead_letter_jobs()
                 .iter()
@@ -1232,12 +1257,7 @@ async fn subscription_sender(
     sender
 }
 
-async fn broadcast_job_event(
-    subscriptions: &SubscriptionMap,
-    queue: String,
-    kind: &str,
-    job: Job,
-) {
+async fn broadcast_job_event(subscriptions: &SubscriptionMap, queue: String, kind: &str, job: Job) {
     let sender = subscription_sender(subscriptions, &queue).await;
     let _ = sender.send(QueueResponse::Event {
         queue,
@@ -1370,7 +1390,9 @@ async fn handle_queue_request(
                     };
                     match guard.dequeue_for_queue(queue_name) {
                         Ok(Some(job)) => {
-                            runtime.register_processing(queue_name, job.id, permit).await;
+                            runtime
+                                .register_processing(queue_name, job.id, permit)
+                                .await;
                             Ok(Some(job))
                         }
                         Ok(None) => Ok(None),
@@ -1463,10 +1485,7 @@ async fn next_subscription_event(
     None
 }
 
-async fn run_scheduled_job_promoter(
-    queue: SharedPersistentQueue,
-    subscriptions: SubscriptionMap,
-) {
+async fn run_scheduled_job_promoter(queue: SharedPersistentQueue, subscriptions: SubscriptionMap) {
     let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
     loop {
         interval.tick().await;
@@ -1538,7 +1557,10 @@ async fn run_cron_scheduler(
 }
 
 async fn run_heartbeat_monitor(queue: SharedPersistentQueue, runtime: QueueRuntimeState) {
-    let poll_every = runtime.config.heartbeat_interval.min(StdDuration::from_secs(1));
+    let poll_every = runtime
+        .config
+        .heartbeat_interval
+        .min(StdDuration::from_secs(1));
     let mut interval = tokio::time::interval(poll_every);
     loop {
         interval.tick().await;
@@ -1577,9 +1599,9 @@ mod tests {
     use chrono::Duration;
     use futures_util::{SinkExt, StreamExt};
     use tempfile::TempDir;
-    use tower::ServiceExt;
     use tokio::net::TcpListener;
     use tokio_tungstenite::{connect_async, tungstenite::Message};
+    use tower::ServiceExt;
 
     fn make_job(queue: &str, payload: &[u8], max_attempts: u32) -> Job {
         Job::new(queue.to_string(), payload.to_vec(), max_attempts)
@@ -1707,7 +1729,8 @@ mod tests {
         let wal_path = dir.path().join(DEFAULT_WAL_FILE);
         let mut file = File::open(wal_path).expect("wal file should exist");
         let mut len_buf = [0u8; 4];
-        file.read_exact(&mut len_buf).expect("length prefix should exist");
+        file.read_exact(&mut len_buf)
+            .expect("length prefix should exist");
         let length = u32::from_le_bytes(len_buf) as usize;
         let mut payload = vec![0u8; length];
         file.read_exact(&mut payload).expect("payload should exist");
@@ -1730,7 +1753,10 @@ mod tests {
         let reopened = PersistentQueue::open(dir.path()).expect("queue should reopen");
 
         assert_eq!(reopened.queue().pending_len(), 1);
-        assert_eq!(reopened.queue().pending.front().map(|job| job.id), Some(job_id));
+        assert_eq!(
+            reopened.queue().pending.front().map(|job| job.id),
+            Some(job_id)
+        );
     }
 
     #[test]
@@ -1822,7 +1848,10 @@ mod tests {
         let reopened = PersistentQueue::open(dir.path()).expect("queue should reopen");
 
         assert_eq!(reopened.queue().pending_len(), 1);
-        assert_eq!(reopened.queue().pending.front().map(|job| job.id), Some(job_id));
+        assert_eq!(
+            reopened.queue().pending.front().map(|job| job.id),
+            Some(job_id)
+        );
     }
 
     #[test]
@@ -1855,7 +1884,10 @@ mod tests {
         let recovered = wal.load_queue().expect("queue should recover");
 
         assert_eq!(recovered.pending_len(), 1);
-        assert_eq!(recovered.pending.front().map(|job| job.id), Some(first_job.id));
+        assert_eq!(
+            recovered.pending.front().map(|job| job.id),
+            Some(first_job.id)
+        );
     }
 
     #[test]
@@ -1946,11 +1978,14 @@ mod tests {
             .await
             .expect("enqueue should send");
 
-        let response = socket.next().await.expect("response expected").expect("response ok");
-        let response: QueueResponse = serde_json::from_str(
-            response.to_text().expect("text response expected"),
-        )
-        .expect("response should deserialize");
+        let response = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
+        let response: QueueResponse =
+            serde_json::from_str(response.to_text().expect("text response expected"))
+                .expect("response should deserialize");
         match response {
             QueueResponse::Enqueued { job } => assert_eq!(job.queue, "emails"),
             other => panic!("unexpected response: {:?}", other),
@@ -1961,13 +1996,20 @@ mod tests {
             .send(Message::Text(stats))
             .await
             .expect("stats should send");
-        let response = socket.next().await.expect("response expected").expect("response ok");
-        let response: QueueResponse = serde_json::from_str(
-            response.to_text().expect("text response expected"),
-        )
-        .expect("response should deserialize");
+        let response = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
+        let response: QueueResponse =
+            serde_json::from_str(response.to_text().expect("text response expected"))
+                .expect("response should deserialize");
         match response {
-            QueueResponse::Stats { pending, processing, .. } => {
+            QueueResponse::Stats {
+                pending,
+                processing,
+                ..
+            } => {
                 assert_eq!(pending, 1);
                 assert_eq!(processing, 0);
             }
@@ -2011,11 +2053,14 @@ mod tests {
             .await
             .expect("schedule should send");
 
-        let response = socket.next().await.expect("response expected").expect("response ok");
-        let response: QueueResponse = serde_json::from_str(
-            response.to_text().expect("text response expected"),
-        )
-        .expect("response should deserialize");
+        let response = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
+        let response: QueueResponse =
+            serde_json::from_str(response.to_text().expect("text response expected"))
+                .expect("response should deserialize");
         match response {
             QueueResponse::Enqueued { job } => {
                 assert_eq!(job.queue, "emails");
@@ -2025,16 +2070,23 @@ mod tests {
         }
 
         socket
-            .send(Message::Text(serde_json::to_string(&QueueRequest::Stats).expect("serialize")))
+            .send(Message::Text(
+                serde_json::to_string(&QueueRequest::Stats).expect("serialize"),
+            ))
             .await
             .expect("stats should send");
-        let response = socket.next().await.expect("response expected").expect("response ok");
-        let response: QueueResponse = serde_json::from_str(
-            response.to_text().expect("text response expected"),
-        )
-        .expect("response should deserialize");
+        let response = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
+        let response: QueueResponse =
+            serde_json::from_str(response.to_text().expect("text response expected"))
+                .expect("response should deserialize");
         match response {
-            QueueResponse::Stats { pending, scheduled, .. } => {
+            QueueResponse::Stats {
+                pending, scheduled, ..
+            } => {
                 assert_eq!(pending, 0);
                 assert_eq!(scheduled, 1);
             }
@@ -2052,11 +2104,14 @@ mod tests {
                 ))
                 .await
                 .expect("dequeue should send");
-            let response = socket.next().await.expect("response expected").expect("response ok");
-            let response: QueueResponse = serde_json::from_str(
-                response.to_text().expect("text response expected"),
-            )
-            .expect("response should deserialize");
+            let response = socket
+                .next()
+                .await
+                .expect("response expected")
+                .expect("response ok");
+            let response: QueueResponse =
+                serde_json::from_str(response.to_text().expect("text response expected"))
+                    .expect("response should deserialize");
             if let QueueResponse::Dequeued { job: Some(job) } = response {
                 assert_eq!(job.queue, "emails");
                 let elapsed = started.elapsed();
@@ -2103,11 +2158,14 @@ mod tests {
             .await
             .expect("cron should send");
 
-        let response = socket.next().await.expect("response expected").expect("response ok");
-        let response: QueueResponse = serde_json::from_str(
-            response.to_text().expect("text response expected"),
-        )
-        .expect("response should deserialize");
+        let response = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
+        let response: QueueResponse =
+            serde_json::from_str(response.to_text().expect("text response expected"))
+                .expect("response should deserialize");
         assert!(matches!(response, QueueResponse::CronRegistered { .. }));
 
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
@@ -2123,11 +2181,14 @@ mod tests {
                 .await
                 .expect("dequeue should send");
 
-            let response = socket.next().await.expect("response expected").expect("response ok");
-            let response: QueueResponse = serde_json::from_str(
-                response.to_text().expect("text response expected"),
-            )
-            .expect("response should deserialize");
+            let response = socket
+                .next()
+                .await
+                .expect("response expected")
+                .expect("response ok");
+            let response: QueueResponse =
+                serde_json::from_str(response.to_text().expect("text response expected"))
+                    .expect("response should deserialize");
             if matches!(response, QueueResponse::Dequeued { job: Some(_) }) {
                 found = true;
                 break;
@@ -2174,7 +2235,11 @@ mod tests {
                 ))
                 .await
                 .expect("enqueue should send");
-            let _ = socket.next().await.expect("response expected").expect("response ok");
+            let _ = socket
+                .next()
+                .await
+                .expect("response expected")
+                .expect("response ok");
         }
 
         socket
@@ -2187,7 +2252,11 @@ mod tests {
             ))
             .await
             .expect("first dequeue should send");
-        let first = socket.next().await.expect("response expected").expect("response ok");
+        let first = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
         let first: QueueResponse =
             serde_json::from_str(first.to_text().expect("text expected")).expect("deserialize");
         assert!(matches!(first, QueueResponse::Dequeued { job: Some(_) }));
@@ -2202,7 +2271,11 @@ mod tests {
             ))
             .await
             .expect("second dequeue should send");
-        let second = socket.next().await.expect("response expected").expect("response ok");
+        let second = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
         let second: QueueResponse =
             serde_json::from_str(second.to_text().expect("text expected")).expect("deserialize");
         assert!(matches!(second, QueueResponse::Dequeued { job: None }));
@@ -2249,7 +2322,11 @@ mod tests {
             ))
             .await
             .expect("enqueue should send");
-        let _ = socket.next().await.expect("response expected").expect("response ok");
+        let _ = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
 
         socket
             .send(Message::Text(
@@ -2261,7 +2338,11 @@ mod tests {
             ))
             .await
             .expect("dequeue should send");
-        let response = socket.next().await.expect("response expected").expect("response ok");
+        let response = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
         let response: QueueResponse =
             serde_json::from_str(response.to_text().expect("text expected")).expect("deserialize");
         let job = match response {
@@ -2280,10 +2361,17 @@ mod tests {
             ))
             .await
             .expect("stats should send");
-        let _ = socket.next().await.expect("response expected").expect("response ok");
+        let _ = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
 
         let reopened = PersistentQueue::open(dir.path()).expect("queue should recover");
-        assert_eq!(reopened.queue().failure_reason(job.id), Some("heartbeat timeout"));
+        assert_eq!(
+            reopened.queue().failure_reason(job.id),
+            Some("heartbeat timeout")
+        );
         assert_eq!(reopened.queue().pending_len(), 1);
 
         server_task.abort();
@@ -2328,7 +2416,11 @@ mod tests {
             ))
             .await
             .expect("enqueue should send");
-        let _ = socket.next().await.expect("response expected").expect("response ok");
+        let _ = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
 
         socket
             .send(Message::Text(
@@ -2340,7 +2432,11 @@ mod tests {
             ))
             .await
             .expect("dequeue should send");
-        let response = socket.next().await.expect("response expected").expect("response ok");
+        let response = socket
+            .next()
+            .await
+            .expect("response expected")
+            .expect("response ok");
         let response: QueueResponse =
             serde_json::from_str(response.to_text().expect("text expected")).expect("deserialize");
         let job = match response {
@@ -2360,11 +2456,14 @@ mod tests {
                 ))
                 .await
                 .expect("heartbeat should send");
-            let response = socket.next().await.expect("response expected").expect("response ok");
-            let response: QueueResponse = serde_json::from_str(
-                response.to_text().expect("text expected"),
-            )
-            .expect("deserialize");
+            let response = socket
+                .next()
+                .await
+                .expect("response expected")
+                .expect("response ok");
+            let response: QueueResponse =
+                serde_json::from_str(response.to_text().expect("text expected"))
+                    .expect("deserialize");
             assert!(matches!(response, QueueResponse::HeartbeatRecorded { .. }));
         }
 
@@ -2396,7 +2495,16 @@ mod tests {
                 .expect("job expected");
             server
                 .runtime
-                .register_processing("emails", job.id, server.runtime.acquire_permit("emails").await.expect("permit").expect("available"))
+                .register_processing(
+                    "emails",
+                    job.id,
+                    server
+                        .runtime
+                        .acquire_permit("emails")
+                        .await
+                        .expect("permit")
+                        .expect("available"),
+                )
                 .await;
             let _ = guard.ack(job.id).expect("ack should work");
             server.runtime.finish_job(job.id, true).await;
@@ -2453,11 +2561,14 @@ mod tests {
             .send(Message::Text(subscribe))
             .await
             .expect("subscribe should send");
-        let subscribed = subscriber.next().await.expect("ack expected").expect("ack ok");
-        let subscribed: QueueResponse = serde_json::from_str(
-            subscribed.to_text().expect("text response expected"),
-        )
-        .expect("response should deserialize");
+        let subscribed = subscriber
+            .next()
+            .await
+            .expect("ack expected")
+            .expect("ack ok");
+        let subscribed: QueueResponse =
+            serde_json::from_str(subscribed.to_text().expect("text response expected"))
+                .expect("response should deserialize");
         assert!(matches!(subscribed, QueueResponse::Subscribed { .. }));
 
         let (mut client, _) = connect_async(format!("ws://127.0.0.1:{port}"))
@@ -2473,7 +2584,11 @@ mod tests {
             .send(Message::Text(enqueue))
             .await
             .expect("enqueue should send");
-        let _ = client.next().await.expect("enqueue response").expect("enqueue ok");
+        let _ = client
+            .next()
+            .await
+            .expect("enqueue response")
+            .expect("enqueue ok");
 
         let event = subscriber
             .next()
@@ -2499,9 +2614,14 @@ mod tests {
             .send(Message::Text(dequeue))
             .await
             .expect("dequeue should send");
-        let response = client.next().await.expect("dequeue response").expect("dequeue ok");
-        let response: QueueResponse = serde_json::from_str(response.to_text().expect("text expected"))
-            .expect("response should deserialize");
+        let response = client
+            .next()
+            .await
+            .expect("dequeue response")
+            .expect("dequeue ok");
+        let response: QueueResponse =
+            serde_json::from_str(response.to_text().expect("text expected"))
+                .expect("response should deserialize");
         let dequeued_job = match response {
             QueueResponse::Dequeued { job: Some(job) } => job,
             other => panic!("unexpected dequeue response: {:?}", other),
@@ -2517,8 +2637,9 @@ mod tests {
             .await
             .expect("ack should send");
         let response = client.next().await.expect("ack response").expect("ack ok");
-        let response: QueueResponse = serde_json::from_str(response.to_text().expect("text expected"))
-            .expect("response should deserialize");
+        let response: QueueResponse =
+            serde_json::from_str(response.to_text().expect("text expected"))
+                .expect("response should deserialize");
         match response {
             QueueResponse::Acked { job } => assert_eq!(job.id, dequeued_job.id),
             other => panic!("unexpected ack response: {:?}", other),

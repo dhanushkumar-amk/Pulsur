@@ -179,7 +179,9 @@ impl ReverseProxy {
         Ok(Self {
             routes: Arc::new(routes),
             client: reqwest::Client::new(),
-            cache: Cache::builder().max_capacity(config.cache.max_entries).build(),
+            cache: Cache::builder()
+                .max_capacity(config.cache.max_entries)
+                .build(),
             cache_ttl: Duration::from_secs(config.cache.default_ttl_secs),
             path_index: Arc::new(Mutex::new(HashMap::new())),
             counters: Arc::new(CacheCounters::default()),
@@ -221,12 +223,14 @@ impl ReverseProxy {
 
         match route.target {
             LocationTarget::StaticDir(dir) => {
-                self.serve_static_file(&route.path, &dir, request.uri()).await
+                self.serve_static_file(&route.path, &dir, request.uri())
+                    .await
             }
             LocationTarget::Upstream(upstream) => self.proxy_http_request(&upstream, request).await,
-            LocationTarget::WebSocket(_) => {
-                text_response(StatusCode::BAD_REQUEST, "WebSocket location requires Upgrade")
-            }
+            LocationTarget::WebSocket(_) => text_response(
+                StatusCode::BAD_REQUEST,
+                "WebSocket location requires Upgrade",
+            ),
         }
     }
 
@@ -257,7 +261,10 @@ impl ReverseProxy {
                     })
                     .into_response()
             }
-            _ => text_response(StatusCode::BAD_REQUEST, "Location is not a websocket upstream"),
+            _ => text_response(
+                StatusCode::BAD_REQUEST,
+                "Location is not a websocket upstream",
+            ),
         }
     }
 
@@ -769,12 +776,12 @@ fn tungstenite_to_axum(message: TungsteniteMessage) -> Message {
         TungsteniteMessage::Binary(bytes) => Message::Binary(bytes),
         TungsteniteMessage::Ping(bytes) => Message::Ping(bytes),
         TungsteniteMessage::Pong(bytes) => Message::Pong(bytes),
-        TungsteniteMessage::Close(frame) => Message::Close(frame.map(|frame| {
-            axum::extract::ws::CloseFrame {
+        TungsteniteMessage::Close(frame) => {
+            Message::Close(frame.map(|frame| axum::extract::ws::CloseFrame {
                 code: frame.code.into(),
                 reason: frame.reason.to_string().into(),
-            }
-        })),
+            }))
+        }
         TungsteniteMessage::Frame(frame) => Message::Binary(frame.into_data()),
     }
 }

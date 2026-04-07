@@ -3,27 +3,27 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 // Import our crate names from Cargo.toml
-use load_balancer::{Backend, BackendPool, BackendPoolConfig};
-use rate_limiter::DistributedTokenBucketRateLimiter;
-use queue::{PersistentQueue, Job};
 use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig as CbConfig, CircuitState};
+use load_balancer::{Backend, BackendPool, BackendPoolConfig};
+use queue::{Job, PersistentQueue};
+use rate_limiter::DistributedTokenBucketRateLimiter;
 
 #[tokio::test]
 async fn chaos_scenario_1_lb_backend_failure() {
     println!("--- Scenario 1: Kill one LB backend randomly mid-test ---");
-    
+
     let config = BackendPoolConfig::default();
     let pool = Arc::new(BackendPool::from_config(config));
-    
+
     // Add 3 backends
     let b1 = Backend::new("127.0.0.1:8081", 1);
     let b2 = Backend::new("127.0.0.1:8082", 1);
     let b3 = Backend::new("127.0.0.1:8083", 1);
-    
+
     pool.add(b1);
     pool.add(b2);
     pool.add(b3);
-    
+
     // Verify RR works
     let mut picked = Vec::new();
     for _ in 0..3 {
@@ -52,7 +52,7 @@ async fn chaos_scenario_1_lb_backend_failure() {
             picked_after.push(b.address.clone());
         }
     }
-    
+
     println!("Traffic after failure: {:?}", picked_after);
     assert!(!picked_after.contains(&"127.0.0.1:8082".to_string()));
     assert_eq!(picked_after.len(), 4);
@@ -62,12 +62,12 @@ async fn chaos_scenario_1_lb_backend_failure() {
 #[tokio::test]
 async fn chaos_scenario_2_redis_failure_fallback() {
     println!("--- Scenario 2: Kill Redis mid-test ---");
-    
+
     let redis_url = "redis://invalid_host:6379";
-    
+
     // new() is async and needs 10.0 (f64) for capacity/rate
     let limiter_res = DistributedTokenBucketRateLimiter::new(redis_url, 10.0, 1.0).await;
-    
+
     match limiter_res {
         Ok(limiter) => {
             println!("Attempting check with 'dead' Redis...");
@@ -75,7 +75,7 @@ async fn chaos_scenario_2_redis_failure_fallback() {
             let result = limiter.check_key("test_user", 1.0).await;
             assert!(result.is_ok());
             println!("SUCCESS: Rate limiter fell back to in-memory gracefully.");
-        },
+        }
         Err(_) => {
             println!("SKIP: Redis connection failed early during initialization (Expected).");
         }
@@ -85,10 +85,10 @@ async fn chaos_scenario_2_redis_failure_fallback() {
 #[tokio::test]
 async fn chaos_scenario_3_wal_corruption_recovery() {
     println!("--- Scenario 3: Corrupt WAL file ---");
-    
+
     let test_dir = tempfile::tempdir().unwrap();
     let wal_path = test_dir.path().join("wal.log");
-    
+
     {
         // 1. Create a queue and add some data
         let mut queue = PersistentQueue::open(test_dir.path()).unwrap();
@@ -113,7 +113,7 @@ async fn chaos_scenario_3_wal_corruption_recovery() {
 
     // 3. Restart queue and check recovery
     let queue = PersistentQueue::open(test_dir.path()).unwrap();
-    
+
     // Replay should have loaded the first 2 jobs and ignored/handled the corruption at the end.
     let head_exists = queue.queue().pending.front().is_some();
     println!("Queue restarted. Head exists: {}", head_exists);
@@ -124,7 +124,7 @@ async fn chaos_scenario_3_wal_corruption_recovery() {
 #[tokio::test]
 async fn chaos_scenario_4_latency_circuit_breaker() {
     println!("--- Scenario 4: Introduce 500ms artificial latency ---");
-    
+
     let config = CbConfig {
         failure_rate_threshold: 50.0,
         reset_timeout: Duration::from_millis(1000),
@@ -132,17 +132,19 @@ async fn chaos_scenario_4_latency_circuit_breaker() {
         minimum_requests: 3,
     };
     // new takes a name, with_config takes name and config
-    let mut cb = CircuitBreaker::with_config("chaos-cb", config);
+    let cb = CircuitBreaker::with_config("chaos-cb", config);
 
     // Simulate high latency calls
     println!("Injecting 500ms latency calls (timeout is 100ms)...");
-    
+
     for i in 0..6 {
-        let res = cb.call_with_timeout::<_, _, ()>(Duration::from_millis(100), || async {
-            sleep(Duration::from_millis(500)).await;
-            Ok(())
-        }).await;
-        
+        let res = cb
+            .call_with_timeout::<_, _, ()>(Duration::from_millis(100), || async {
+                sleep(Duration::from_millis(500)).await;
+                Ok(())
+            })
+            .await;
+
         println!("Call {}: {:?}", i + 1, res);
     }
 
@@ -153,15 +155,15 @@ async fn chaos_scenario_4_latency_circuit_breaker() {
 #[tokio::test]
 async fn chaos_scenario_5_disk_full_handling() {
     println!("--- Scenario 5: Fill disk on queue host ---");
-    
+
     let test_dir = tempfile::tempdir().unwrap();
     let wal_path = test_dir.path().join("wal.log");
-    
+
     let mut queue = PersistentQueue::open(test_dir.path()).unwrap();
-    
+
     let valid_job = Job::new("default", b"valid-job".to_vec(), 3);
     queue.enqueue(valid_job).unwrap();
-    
+
     println!("Making WAL file read-only to simulate full disk/no permissions...");
     let mut perms = std::fs::metadata(&wal_path).unwrap().permissions();
     perms.set_readonly(true);
@@ -170,7 +172,7 @@ async fn chaos_scenario_5_disk_full_handling() {
     let failing_job = Job::new("default", b"failing-job".to_vec(), 3);
     let result = queue.enqueue(failing_job);
     println!("Enqueue result with read-only disk: {:?}", result);
-    
+
     assert!(result.is_err());
     println!("SUCCESS: Queue didn't panic, returned error on write failure.");
 }

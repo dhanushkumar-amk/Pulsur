@@ -20,7 +20,9 @@ impl<K: Hash + Eq + Clone, V: Clone> SimpleHashMap<K, V> {
     pub fn new(capacity: usize) -> Self {
         let mut buckets = Vec::with_capacity(capacity);
         for _ in 0..capacity {
-            buckets.push(Bucket { entries: Vec::new() });
+            buckets.push(Bucket {
+                entries: Vec::new(),
+            });
         }
         Self {
             buckets,
@@ -38,14 +40,14 @@ impl<K: Hash + Eq + Clone, V: Clone> SimpleHashMap<K, V> {
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let bucket_idx = self.hash_key(&key);
         let bucket = &mut self.buckets[bucket_idx];
-        
+
         for entry in &mut bucket.entries {
             if entry.0 == key {
                 let old_value = std::mem::replace(&mut entry.1, value);
                 return Some(old_value);
             }
         }
-        
+
         bucket.entries.push((key, value));
         self.size += 1;
         None
@@ -54,7 +56,7 @@ impl<K: Hash + Eq + Clone, V: Clone> SimpleHashMap<K, V> {
     pub fn get(&self, key: &K) -> Option<&V> {
         let bucket_idx = self.hash_key(key);
         let bucket = &self.buckets[bucket_idx];
-        
+
         for entry in &bucket.entries {
             if entry.0 == *key {
                 return Some(&entry.1);
@@ -66,7 +68,7 @@ impl<K: Hash + Eq + Clone, V: Clone> SimpleHashMap<K, V> {
     pub fn remove(&mut self, key: &K) -> Option<V> {
         let bucket_idx = self.hash_key(key);
         let bucket = &mut self.buckets[bucket_idx];
-        
+
         if let Some(pos) = bucket.entries.iter().position(|entry| entry.0 == *key) {
             self.size -= 1;
             return Some(bucket.entries.remove(pos).1);

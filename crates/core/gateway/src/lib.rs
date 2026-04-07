@@ -1,19 +1,21 @@
-use std::collections::HashMap;
-use http_server::{Request as GatewayRequest, Response as GatewayResponse, Method as HttpMethod, Router, HttpServer, ServerConfig};
-use futures::FutureExt;
-use futures::future::BoxFuture;
-use std::sync::Arc;
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
 use arc_swap::ArcSwap;
-use std::path::Path;
-use notify::{Watcher, RecursiveMode};
 use dashmap::DashMap;
+use futures::future::BoxFuture;
+use futures::FutureExt;
+use http_server::{
+    HttpServer, Method as HttpMethod, Request as GatewayRequest, Response as GatewayResponse,
+    Router, ServerConfig,
+};
+use notify::{RecursiveMode, Watcher};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
+use uuid::Uuid;
 
 pub mod auth;
 pub use auth::*;
-
 
 /// Context for the gateway request pipeline.
 pub struct Context {
@@ -51,7 +53,9 @@ impl Next {
                 };
                 plugin.call(ctx, next).await
             } else {
-                ctx.response.take().unwrap_or_else(|| GatewayResponse::new(404))
+                ctx.response
+                    .take()
+                    .unwrap_or_else(|| GatewayResponse::new(404))
             }
         })
     }
@@ -112,7 +116,9 @@ pub struct RateLimitConfig {
     pub api_key_header: String,
 }
 
-fn default_api_key_header() -> String { "x-api-key".to_string() }
+fn default_api_key_header() -> String {
+    "x-api-key".to_string()
+}
 
 /// A specialized plugin for Phase 16: Identity-based Sliding Window Rate Limiting.
 pub struct RateLimitPlugin {
@@ -167,7 +173,11 @@ impl Plugin for RateLimitPlugin {
             };
 
             // 3. Key Extraction (Order: Header -> Auth Claim -> IP)
-            let key = if let Some(k) = ctx.request.headers.get(&self.config.api_key_header.to_lowercase()) {
+            let key = if let Some(k) = ctx
+                .request
+                .headers
+                .get(&self.config.api_key_header.to_lowercase())
+            {
                 format!("api-key:{}", k)
             } else if let Some(sub) = ctx.metadata.get("auth_sub") {
                 format!("user:{}", sub)
@@ -179,7 +189,11 @@ impl Plugin for RateLimitPlugin {
             let limiter = match self.limiter_for(limit) {
                 Ok(limiter) => limiter,
                 Err(e) => {
-                    tracing::error!("invalid rate limiter configuration for path {}: {}", path, e);
+                    tracing::error!(
+                        "invalid rate limiter configuration for path {}: {}",
+                        path,
+                        e
+                    );
                     return next.run(ctx).await;
                 }
             };
@@ -189,24 +203,43 @@ impl Plugin for RateLimitPlugin {
                     if !status.allowed {
                         tracing::warn!("Rate limit exceeded for key: {} (Path: {})", key, path);
                         metrics::counter!("gateway.rate_limit_exceeded_total", "key" => key.clone(), "path" => path.to_string()).increment(1);
-                        
+
                         let mut res = GatewayResponse::new(429);
-                        res.headers.insert("retry-after".to_string(), status.retry_after_secs.to_string());
-                        res.headers.insert("x-ratelimit-limit".to_string(), status.limit.to_string());
-                        res.headers.insert("x-ratelimit-remaining".to_string(), "0".to_string());
-                        res.headers.insert("x-ratelimit-reset".to_string(), status.reset_after_secs.to_string());
-                        
+                        res.headers.insert(
+                            "retry-after".to_string(),
+                            status.retry_after_secs.to_string(),
+                        );
+                        res.headers
+                            .insert("x-ratelimit-limit".to_string(), status.limit.to_string());
+                        res.headers
+                            .insert("x-ratelimit-remaining".to_string(), "0".to_string());
+                        res.headers.insert(
+                            "x-ratelimit-reset".to_string(),
+                            status.reset_after_secs.to_string(),
+                        );
+
                         // User-friendly excess message
-                        res.body = format!("Rate limit exceeded. Try again in {} seconds.", status.retry_after_secs)
-                            .as_bytes().to_vec();
+                        res.body = format!(
+                            "Rate limit exceeded. Try again in {} seconds.",
+                            status.retry_after_secs
+                        )
+                        .as_bytes()
+                        .to_vec();
                         return res;
                     }
 
                     // 5. Success: Call next, but inject stats headers on the way back
                     let mut res = next.run(ctx).await;
-                    res.headers.insert("x-ratelimit-limit".to_string(), status.limit.to_string());
-                    res.headers.insert("x-ratelimit-remaining".to_string(), status.remaining.to_string());
-                    res.headers.insert("x-ratelimit-reset".to_string(), status.reset_after_secs.to_string());
+                    res.headers
+                        .insert("x-ratelimit-limit".to_string(), status.limit.to_string());
+                    res.headers.insert(
+                        "x-ratelimit-remaining".to_string(),
+                        status.remaining.to_string(),
+                    );
+                    res.headers.insert(
+                        "x-ratelimit-reset".to_string(),
+                        status.reset_after_secs.to_string(),
+                    );
                     res
                 }
                 Err(e) => {
@@ -241,11 +274,16 @@ impl Plugin for TransformPlugin {
             // ──────────────────────────────────────────────────
 
             // A. Inject X-Request-ID (UUID v4)
-            let rid = ctx.request.headers.get("x-request-id")
+            let rid = ctx
+                .request
+                .headers
+                .get("x-request-id")
                 .cloned()
                 .unwrap_or_else(|| {
                     let r = Uuid::new_v4().to_string();
-                    ctx.request.headers.insert("x-request-id".to_string(), r.clone());
+                    ctx.request
+                        .headers
+                        .insert("x-request-id".to_string(), r.clone());
                     r
                 });
             ctx.metadata.insert("request_id".to_string(), rid.clone());
@@ -256,7 +294,9 @@ impl Plugin for TransformPlugin {
                 Some(current) => format!("{}, {}", current, client_ip),
                 None => client_ip,
             };
-            ctx.request.headers.insert("x-forwarded-for".to_string(), xff);
+            ctx.request
+                .headers
+                .insert("x-forwarded-for".to_string(), xff);
 
             // C. Path Rewriting (Prefix strip)
             if let Some(prefix) = &self.config.prefix_strip {
@@ -272,18 +312,24 @@ impl Plugin for TransformPlugin {
 
             // D. Request Body Transformation (JSON key remapping)
             if !self.config.body_transformations.is_empty() && !ctx.request.body.is_empty() {
-                if let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&ctx.request.body) {
+                if let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&ctx.request.body)
+                {
                     if let Some(obj) = json.as_object_mut() {
                         let mut changed = false;
                         for (old_key, new_key) in &self.config.body_transformations {
                             if let Some(val) = obj.remove(old_key) {
-                                tracing::info!("Transforming req field: {} -> {}", old_key, new_key);
+                                tracing::info!(
+                                    "Transforming req field: {} -> {}",
+                                    old_key,
+                                    new_key
+                                );
                                 obj.insert(new_key.clone(), val);
                                 changed = true;
                             }
                         }
                         if changed {
-                            ctx.request.body = serde_json::to_vec(&json).unwrap_or_else(|_| ctx.request.body.clone());
+                            ctx.request.body = serde_json::to_vec(&json)
+                                .unwrap_or_else(|_| ctx.request.body.clone());
                         }
                     }
                 }
@@ -321,7 +367,8 @@ impl Plugin for TransformPlugin {
                             }
                         }
                         if changed {
-                            res.body = serde_json::to_vec(&json).unwrap_or_else(|_| res.body.clone());
+                            res.body =
+                                serde_json::to_vec(&json).unwrap_or_else(|_| res.body.clone());
                         }
                     }
                 }
@@ -331,7 +378,6 @@ impl Plugin for TransformPlugin {
         })
     }
 }
-
 
 /// Configuration for the Upstream Forwarder (Phase 17).
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -347,9 +393,15 @@ pub struct UpstreamConfig {
     pub base_backoff_ms: u64,
 }
 
-fn default_timeout() -> u64 { 30 }
-fn default_retries() -> u32 { 3 }
-fn default_base_backoff() -> u64 { 100 }
+fn default_timeout() -> u64 {
+    30
+}
+fn default_retries() -> u32 {
+    3
+}
+fn default_base_backoff() -> u64 {
+    100
+}
 
 impl Default for UpstreamConfig {
     fn default() -> Self {
@@ -392,14 +444,21 @@ impl Plugin for ResilientPassthroughPlugin {
                     _ => reqwest::Method::GET,
                 };
 
-                tracing::info!("Forwarding [Attempt {}/{}]: {} {}", 
-                    attempts + 1, self.config.max_retries + 1, method, target_url);
+                tracing::info!(
+                    "Forwarding [Attempt {}/{}]: {} {}",
+                    attempts + 1,
+                    self.config.max_retries + 1,
+                    method,
+                    target_url
+                );
 
                 let mut req_builder = self.client.request(method, &target_url);
                 for (k, v) in &ctx.request.headers {
-                    if k != "host" { req_builder = req_builder.header(k, v); }
+                    if k != "host" {
+                        req_builder = req_builder.header(k, v);
+                    }
                 }
-                
+
                 // Add retry count header for upstream visibility
                 if attempts > 0 {
                     req_builder = req_builder.header("x-retry-count", attempts.to_string());
@@ -417,13 +476,17 @@ impl Plugin for ResilientPassthroughPlugin {
                     // 1. Success (Network Level)
                     Ok(Ok(resp)) => {
                         let status = resp.status().as_u16();
-                        
+
                         // If it's a 5xx error, we check for retry
                         if status >= 500 && attempts < self.config.max_retries {
                             attempts += 1;
                             let wait = self.calculate_backoff(attempts);
-                            tracing::warn!("Upstream 5xx status: {}. Retrying in {}ms (Attempt {})...", 
-                                status, wait, attempts);
+                            tracing::warn!(
+                                "Upstream 5xx status: {}. Retrying in {}ms (Attempt {})...",
+                                status,
+                                wait,
+                                attempts
+                            );
                             tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
                             continue;
                         }
@@ -432,7 +495,8 @@ impl Plugin for ResilientPassthroughPlugin {
                         let mut res = GatewayResponse::new(status);
                         for (name, val) in resp.headers() {
                             if let Ok(v) = val.to_str() {
-                                res.headers.insert(name.as_str().to_lowercase(), v.to_string());
+                                res.headers
+                                    .insert(name.as_str().to_lowercase(), v.to_string());
                             }
                         }
                         res.body = resp.bytes().await.unwrap_or_default().to_vec();
@@ -442,21 +506,29 @@ impl Plugin for ResilientPassthroughPlugin {
                     // 2. Timeout (Phase 17)
                     Ok(Err(e)) if e.is_timeout() => {
                         if attempts < self.config.max_retries {
-                             attempts += 1;
-                             let wait = self.calculate_backoff(attempts);
-                             tracing::warn!("Upstream timeout. Retrying in {}ms (Attempt {})...", wait, attempts);
-                             tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
-                             continue;
+                            attempts += 1;
+                            let wait = self.calculate_backoff(attempts);
+                            tracing::warn!(
+                                "Upstream timeout. Retrying in {}ms (Attempt {})...",
+                                wait,
+                                attempts
+                            );
+                            tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+                            continue;
                         }
                         return self.bad_gateway("Upstream request timed out after all attempts.");
                     }
                     Err(_) => {
                         if attempts < self.config.max_retries {
-                             attempts += 1;
-                             let wait = self.calculate_backoff(attempts);
-                             tracing::warn!("Upstream timeout. Retrying in {}ms (Attempt {})...", wait, attempts);
-                             tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
-                             continue;
+                            attempts += 1;
+                            let wait = self.calculate_backoff(attempts);
+                            tracing::warn!(
+                                "Upstream timeout. Retrying in {}ms (Attempt {})...",
+                                wait,
+                                attempts
+                            );
+                            tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+                            continue;
                         }
                         return self.bad_gateway("Upstream request timed out after all attempts.");
                     }
@@ -464,13 +536,18 @@ impl Plugin for ResilientPassthroughPlugin {
                     // 3. Network Failure or Unrecoverable Error
                     _ => {
                         if attempts < self.config.max_retries {
-                             attempts += 1;
-                             let wait = self.calculate_backoff(attempts);
-                             tracing::warn!("Network error. Retrying in {}ms (Attempt {})...", wait, attempts);
-                             tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
-                             continue;
+                            attempts += 1;
+                            let wait = self.calculate_backoff(attempts);
+                            tracing::warn!(
+                                "Network error. Retrying in {}ms (Attempt {})...",
+                                wait,
+                                attempts
+                            );
+                            tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+                            continue;
                         }
-                        return self.bad_gateway("Could not connect to upstream after all attempts.");
+                        return self
+                            .bad_gateway("Could not connect to upstream after all attempts.");
                     }
                 }
             }
@@ -502,7 +579,9 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new(plugins: Vec<Box<dyn Plugin>>) -> Self {
-        Self { plugins: Arc::new(plugins) }
+        Self {
+            plugins: Arc::new(plugins),
+        }
     }
 
     pub async fn execute(&self, mut ctx: Context) -> GatewayResponse {
@@ -535,12 +614,17 @@ impl HotReloadGateway {
 
         // Validate: At least one route with a non-empty upstream
         if config.routes.is_empty() {
-            return Err(anyhow::anyhow!("Gateway Config Error: 'routes' must contain at least one entry."));
+            return Err(anyhow::anyhow!(
+                "Gateway Config Error: 'routes' must contain at least one entry."
+            ));
         }
 
         for (i, route) in config.routes.iter().enumerate() {
             if route.upstream.trim().is_empty() {
-                return Err(anyhow::anyhow!("Gateway Config Error (Route #{}): 'upstream' URL cannot be empty.", i + 1));
+                return Err(anyhow::anyhow!(
+                    "Gateway Config Error (Route #{}): 'upstream' URL cannot be empty.",
+                    i + 1
+                ));
             }
         }
 
@@ -551,26 +635,27 @@ impl HotReloadGateway {
         // 1. Setup Hot Reload Watcher
         let pipeline_for_watcher = Arc::clone(&shared_pipeline);
         let path_str = config_path.to_string();
-        
-        let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if let Ok(event) = res {
-                if event.kind.is_modify() {
-                    tracing::info!("Config change detected, reloading...");
-                    if let Ok(new_str) = std::fs::read_to_string(&path_str) {
-                        if let Ok(new_cfg) = serde_yaml::from_str::<GatewayConfig>(&new_str) {
-                            if let Ok(new_pipe) = Self::build_pipeline(&new_cfg) {
-                                pipeline_for_watcher.store(Arc::new(new_pipe));
-                                tracing::info!("Gateway pipeline updated successfully!");
+
+        let mut watcher =
+            notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                if let Ok(event) = res {
+                    if event.kind.is_modify() {
+                        tracing::info!("Config change detected, reloading...");
+                        if let Ok(new_str) = std::fs::read_to_string(&path_str) {
+                            if let Ok(new_cfg) = serde_yaml::from_str::<GatewayConfig>(&new_str) {
+                                if let Ok(new_pipe) = Self::build_pipeline(&new_cfg) {
+                                    pipeline_for_watcher.store(Arc::new(new_pipe));
+                                    tracing::info!("Gateway pipeline updated successfully!");
+                                } else {
+                                    tracing::error!("Failed to rebuild pipeline from new config");
+                                }
                             } else {
-                                tracing::error!("Failed to rebuild pipeline from new config");
+                                tracing::error!("Failed to parse new config schema");
                             }
-                        } else {
-                            tracing::error!("Failed to parse new config schema");
                         }
                     }
                 }
-            }
-        })?;
+            })?;
 
         watcher.watch(Path::new(config_path), RecursiveMode::NonRecursive)?;
 
@@ -590,22 +675,30 @@ impl HotReloadGateway {
             let pipeline_ref = Arc::clone(&shared_pipeline);
             let upstream = route.upstream.clone();
 
-            router.add_http(method, &route.path, Arc::new(move |req| {
-                let pipeline = pipeline_ref.load_full();
-                let upstream_url = upstream.clone();
-                async move {
-                    let mut ctx = Context::new(req);
-                    ctx.upstream_url = Some(upstream_url);
-                    pipeline.execute(ctx).await
-                }.boxed()
-            }));
+            router.add_http(
+                method,
+                &route.path,
+                Arc::new(move |req| {
+                    let pipeline = pipeline_ref.load_full();
+                    let upstream_url = upstream.clone();
+                    async move {
+                        let mut ctx = Context::new(req);
+                        ctx.upstream_url = Some(upstream_url);
+                        pipeline.execute(ctx).await
+                    }
+                    .boxed()
+                }),
+            );
         }
 
         // 3. Start Server
         let server_config = ServerConfig::default();
         let server = HttpServer::new(router, server_config);
-        
-        tracing::info!("Pulsar Gateway [Phase 15] listening on http://{}", listen_addr);
+
+        tracing::info!(
+            "Pulsar Gateway [Phase 15] listening on http://{}",
+            listen_addr
+        );
         server.run(&listen_addr).await?;
 
         Ok(())
@@ -641,7 +734,9 @@ impl HotReloadGateway {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http_server::{Request as GatewayRequest, Method, HttpVersion, Response as GatewayResponse};
+    use http_server::{
+        HttpVersion, Method, Request as GatewayRequest, Response as GatewayResponse,
+    };
 
     fn mock_context(path: &str, body: Option<&str>) -> Context {
         let mut headers = HashMap::new();
@@ -675,27 +770,33 @@ response_body_strip:
   - "internal_field"
 "#;
         let plugin = TransformPlugin::from_config(yaml).unwrap();
-        
+
         // Use a capture structure to inspect what Request the next plugin sees
         struct CapturePlugin;
         impl Plugin for CapturePlugin {
-            fn call<'a>(&'a self, ctx: &'a mut Context, _next: Next) -> BoxFuture<'a, GatewayResponse> {
+            fn call<'a>(
+                &'a self,
+                ctx: &'a mut Context,
+                _next: Next,
+            ) -> BoxFuture<'a, GatewayResponse> {
                 Box::pin(async move {
                     // Check Request Injections
                     assert!(ctx.request.headers.contains_key("x-request-id"));
                     assert!(ctx.request.headers.contains_key("x-forwarded-for"));
-                    
+
                     // Check Path Rewriting
                     assert_eq!(ctx.request.path, "/users");
 
                     // Check Body Transformation
-                    let body: serde_json::Value = serde_json::from_slice(&ctx.request.body).unwrap();
+                    let body: serde_json::Value =
+                        serde_json::from_slice(&ctx.request.body).unwrap();
                     assert!(body.get("new_key").is_some());
                     assert!(body.get("old_key").is_none());
 
                     // Return a dummy response with an internal header to be stripped
                     let mut res = GatewayResponse::new(200);
-                    res.headers.insert("x-internal-id".to_string(), "secret".to_string());
+                    res.headers
+                        .insert("x-internal-id".to_string(), "secret".to_string());
                     res.body = r#"{"ok":true,"internal_field":"leak"}"#.as_bytes().to_vec();
                     res
                 })
@@ -708,7 +809,7 @@ response_body_strip:
         let res = pipeline.execute(ctx).await;
 
         // 1. Verify Request headers were injected (checked inside CapturePlugin)
-        
+
         // 2. Verify Response Header Injection
         assert_eq!(res.headers.get("access-control-allow-origin").unwrap(), "*");
         assert_eq!(res.headers.get("x-test").unwrap(), "Pulsar");
@@ -720,7 +821,7 @@ response_body_strip:
         let body_val: serde_json::Value = serde_json::from_slice(&res.body).unwrap();
         assert!(body_val.get("internal_field").is_none());
         assert_eq!(body_val.get("ok").unwrap(), true);
-        
+
         tracing::info!("Phase 14 transformation test suite passed!");
     }
 
@@ -728,18 +829,22 @@ response_body_strip:
     async fn test_rate_limit_integration() {
         let mut limits = HashMap::new();
         limits.insert("/api".to_string(), 1); // Only 1 request allowed per 60s
-        
+
         let rl_config = RateLimitConfig {
             api_key_header: "x-api-key".to_string(),
             limits,
         };
-        
+
         let plugin = RateLimitPlugin::new(rl_config);
-        
+
         // Mock a final forwarder that always returns 200
         struct SuccessPlugin;
         impl Plugin for SuccessPlugin {
-            fn call<'a>(&'a self, _ctx: &'a mut Context, _next: Next) -> BoxFuture<'a, GatewayResponse> {
+            fn call<'a>(
+                &'a self,
+                _ctx: &'a mut Context,
+                _next: Next,
+            ) -> BoxFuture<'a, GatewayResponse> {
                 Box::pin(async { GatewayResponse::new(200) })
             }
         }
@@ -757,7 +862,7 @@ response_body_strip:
         assert_eq!(res2.status, 429);
         assert!(res2.headers.contains_key("x-ratelimit-limit"));
         assert!(res2.headers.contains_key("retry-after"));
-        
+
         tracing::info!("Phase 16 Rate Limit integration test passed!");
     }
 }

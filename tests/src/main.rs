@@ -1,17 +1,17 @@
-use clap::{Parser, Subcommand};
-use std::sync::Arc;
-use tokio::net::TcpListener;
 use axum::{
     body::Body,
     extract::{State, WebSocketUpgrade},
-    http::{Request, Response, StatusCode, HeaderMap},
+    http::{HeaderMap, Request, Response, StatusCode},
     response::IntoResponse,
     routing::{any, get},
     Router,
 };
+use clap::{Parser, Subcommand};
 use gateway::HotReloadGateway;
 use load_balancer::{Backend, BackendPool};
 use queue::Queue;
+use std::sync::Arc;
+use tokio::net::TcpListener;
 
 #[derive(Parser)]
 #[command(name = "pulsur-test")]
@@ -52,7 +52,10 @@ async fn main() -> anyhow::Result<()> {
             HotReloadGateway::start(&config).await?;
         }
         Commands::Lb { addr, backends } => {
-            println!("Starting Load Balancer on {} with backends: {:?}", addr, backends);
+            println!(
+                "Starting Load Balancer on {} with backends: {:?}",
+                addr, backends
+            );
             let pool = Arc::new(BackendPool::new());
             for b in backends {
                 pool.add(Backend::new(&b, 1));
@@ -70,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Queue { addr } => {
             println!("Starting Queue Service on {}", addr);
             let queue = Arc::new(Queue::new());
-            
+
             let app = Router::new()
                 .route("/ws", get(queue_ws_handler))
                 .with_state(queue);
@@ -89,10 +92,12 @@ async fn lb_proxy_handler(
 ) -> Response<Body> {
     let backend = match pool.next_round_robin() {
         Some(b) => b,
-        None => return Response::builder()
-            .status(StatusCode::SERVICE_UNAVAILABLE)
-            .body(Body::from("No healthy backends"))
-            .unwrap(),
+        None => {
+            return Response::builder()
+                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .body(Body::from("No healthy backends"))
+                .unwrap()
+        }
     };
 
     let client = reqwest::Client::new();
@@ -104,7 +109,7 @@ async fn lb_proxy_handler(
     for (key, value) in req.headers() {
         builder = builder.header(key, value);
     }
-    
+
     match builder.send().await {
         Ok(res) => {
             let status = res.status();
@@ -132,7 +137,10 @@ async fn queue_ws_handler(
     ws.on_upgrade(move |mut socket| async move {
         while let Some(msg) = socket.recv().await {
             if let Ok(axum::extract::ws::Message::Text(text)) = msg {
-                socket.send(axum::extract::ws::Message::Text(format!("Ack: {}", text))).await.ok();
+                socket
+                    .send(axum::extract::ws::Message::Text(format!("Ack: {}", text)))
+                    .await
+                    .ok();
             }
         }
     })

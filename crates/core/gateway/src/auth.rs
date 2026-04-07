@@ -1,7 +1,7 @@
 use crate::{Context, Next, Plugin};
 use futures::future::BoxFuture;
 use http_server::Response as GatewayResponse;
-use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -51,7 +51,12 @@ impl Plugin for AuthPlugin {
         Box::pin(async move {
             // 1. Check bypass list
             // Paths are checked for prefix matches to allow sub-paths on bypass.
-            if self.config.bypass_paths.iter().any(|p| ctx.request.path.starts_with(p)) {
+            if self
+                .config
+                .bypass_paths
+                .iter()
+                .any(|p| ctx.request.path.starts_with(p))
+            {
                 tracing::info!("Bypassing auth for: {}", ctx.request.path);
                 return next.run(ctx).await;
             }
@@ -95,9 +100,10 @@ impl Plugin for AuthPlugin {
             let key = DecodingKey::from_secret(self.config.secret.as_bytes());
 
             match decode::<Claims>(token, &key, &validation) {
-                               Ok(token_data) => {
+                Ok(token_data) => {
                     // 4. Attach status to Context metadata for downstream
-                    ctx.metadata.insert("auth_sub".to_string(), token_data.claims.sub.clone());
+                    ctx.metadata
+                        .insert("auth_sub".to_string(), token_data.claims.sub.clone());
 
                     // Flattened additional claims
                     for (k, v) in &token_data.claims.extra {
@@ -125,8 +131,10 @@ impl Plugin for AuthPlugin {
 mod tests {
     use super::*;
     use crate::{Context, Next, Pipeline, Plugin};
-    use http_server::{Request as GatewayRequest, Method, HttpVersion, Response as GatewayResponse};
-    use jsonwebtoken::{encode, Header, EncodingKey};
+    use http_server::{
+        HttpVersion, Method, Request as GatewayRequest, Response as GatewayResponse,
+    };
+    use jsonwebtoken::{encode, EncodingKey, Header};
 
     fn mock_context(path: &str, auth: Option<&str>) -> Context {
         let mut headers = HashMap::new();
@@ -147,7 +155,11 @@ mod tests {
 
     struct SuccessPlugin;
     impl Plugin for SuccessPlugin {
-        fn call<'a>(&'a self, _ctx: &'a mut Context, _next: Next) -> BoxFuture<'a, GatewayResponse> {
+        fn call<'a>(
+            &'a self,
+            _ctx: &'a mut Context,
+            _next: Next,
+        ) -> BoxFuture<'a, GatewayResponse> {
             Box::pin(async { GatewayResponse::new(200) })
         }
     }
@@ -160,7 +172,12 @@ mod tests {
             exp: 9999999999, // far in the future
             extra: HashMap::new(),
         };
-        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())).unwrap();
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap();
 
         let config = AuthConfig {
             secret: secret.to_string(),
@@ -185,7 +202,12 @@ mod tests {
             exp: 1, // expired long ago
             extra: HashMap::new(),
         };
-        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())).unwrap();
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap();
 
         let config = AuthConfig {
             secret: secret.to_string(),
@@ -212,7 +234,12 @@ mod tests {
         };
         // Encode with HS512 but config defaults to HS256
         let header = Header::new(Algorithm::HS512);
-        let token = encode(&header, &claims, &EncodingKey::from_secret(secret.as_bytes())).unwrap();
+        let token = encode(
+            &header,
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap();
 
         let config = AuthConfig {
             secret: secret.to_string(),

@@ -1,7 +1,7 @@
-use http_server::{HttpServer, Router, Method, Response, ServerConfig};
-use std::sync::Arc;
 use futures::future::FutureExt;
+use http_server::{HttpServer, Method, Response, Router, ServerConfig};
 use serde_json::json;
+use std::sync::Arc;
 
 /// 🚀 Ferrum Performance Laboratory
 /// Zero-Copy Benchmark binary for the HTTP Server Engine.
@@ -9,23 +9,35 @@ use serde_json::json;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // No logging for benchmarks to ensure pure measure of CPU/IO overhead
-    
+
     let mut router = Router::new();
 
     // Matching the Node.js / Fastify payload exactly
-    router.add_http(Method::GET, "/", Arc::new(|_| {
-        async move {
-            Response::json(200, &json!({
-                "message": "Ferrum Engine Online",
-                "version": "0.7.0"
-            })).unwrap()
-        }.boxed()
-    }));
+    router.add_http(
+        Method::GET,
+        "/",
+        Arc::new(|_| {
+            async move {
+                Response::json(
+                    200,
+                    &json!({
+                        "message": "Ferrum Engine Online",
+                        "version": "0.7.0"
+                    }),
+                )
+                .unwrap()
+            }
+            .boxed()
+        }),
+    );
 
-    let server = HttpServer::new(router, ServerConfig {
-        max_conns: 1000,
-        ..ServerConfig::default()
-    });
+    let server = HttpServer::new(
+        router,
+        ServerConfig {
+            max_conns: 1000,
+            ..ServerConfig::default()
+        },
+    );
 
     println!("Ferrum Benchmark Engine: http://127.0.0.1:8080");
     server

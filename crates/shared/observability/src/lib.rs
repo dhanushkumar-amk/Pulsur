@@ -9,9 +9,7 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use metrics::{
-    counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram,
-};
+use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram};
 use metrics_exporter_prometheus::{BuildError, Matcher, PrometheusBuilder, PrometheusHandle};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -237,7 +235,10 @@ impl ObservabilityAgent {
 }
 
 fn register_metric_descriptions() {
-    describe_counter!("request_count", "Total requests observed by Ferrum components.");
+    describe_counter!(
+        "request_count",
+        "Total requests observed by Ferrum components."
+    );
     describe_histogram!(
         "request_duration_ms",
         "Observed request latency in milliseconds."
@@ -257,7 +258,11 @@ fn register_metric_descriptions() {
 fn prune_state(state: &mut MutableState) {
     let cutoff = Instant::now() - SNAPSHOT_WINDOW;
 
-    while state.request_times.front().is_some_and(|time| *time < cutoff) {
+    while state
+        .request_times
+        .front()
+        .is_some_and(|time| *time < cutoff)
+    {
         state.request_times.pop_front();
     }
     while state.error_times.front().is_some_and(|time| *time < cutoff) {

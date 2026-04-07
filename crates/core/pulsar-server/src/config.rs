@@ -21,7 +21,10 @@ impl AppConfig {
         // Load .env file if it exists
         if let Err(e) = dotenvy::dotenv() {
             // Note: We don't error out if .env is missing, as variables might be in the actual environment
-            info!("Skipped .env loading: {}. Using system environment variables.", e);
+            info!(
+                "Skipped .env loading: {}. Using system environment variables.",
+                e
+            );
         }
 
         Self {

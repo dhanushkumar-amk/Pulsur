@@ -1231,7 +1231,7 @@ mod proptests {
         ) {
             let mut bucket = TokenBucket::new(capacity, refill_rate).unwrap();
             let start_time = Instant::now();
-            
+
             // Consume everything
             bucket.try_consume(capacity);
             prop_assert!(bucket.remaining() < 1.0);
@@ -1242,7 +1242,7 @@ mod proptests {
 
             // Check that we didn't exceed capacity
             prop_assert!(bucket.remaining() <= capacity);
-            
+
             // Check that we refilled approximately the right amount
             let expected_refill = (wait_time_ms as f64 / 1000.0) * refill_rate;
             let actual_refill = bucket.remaining();

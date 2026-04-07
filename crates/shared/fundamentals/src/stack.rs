@@ -54,7 +54,7 @@ mod tests {
         let mut stack = Stack::new();
         stack.push("hello");
         stack.push("world");
-        
+
         assert_eq!(stack.len(), 2);
         assert_eq!(stack.pop(), Some("world"));
         assert_eq!(stack.pop(), Some("hello"));

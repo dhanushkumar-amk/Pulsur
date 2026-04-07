@@ -225,7 +225,10 @@ impl CircuitBreaker {
     }
 
     pub fn metrics(&self) -> CircuitMetricsSnapshot {
-        self.metrics.lock().expect("circuit metrics poisoned").snapshot()
+        self.metrics
+            .lock()
+            .expect("circuit metrics poisoned")
+            .snapshot()
     }
 
     pub fn status(&self) -> CircuitStatus {
@@ -252,7 +255,11 @@ impl CircuitBreaker {
     {
         let permit = self.try_acquire_permission_at(Instant::now())?;
         let result = operation().await;
-        self.record_result_at(Instant::now(), permit, result.as_ref().map(|_| ()).map_err(Clone::clone));
+        self.record_result_at(
+            Instant::now(),
+            permit,
+            result.as_ref().map(|_| ()).map_err(Clone::clone),
+        );
         result
     }
 
@@ -271,7 +278,11 @@ impl CircuitBreaker {
             Err(_) => Err(CircuitBreakerError::Timeout),
         };
 
-        self.record_result_at(Instant::now(), permit, result.as_ref().map(|_| ()).map_err(Clone::clone));
+        self.record_result_at(
+            Instant::now(),
+            permit,
+            result.as_ref().map(|_| ()).map_err(Clone::clone),
+        );
         result
     }
 
@@ -342,7 +353,10 @@ impl CircuitBreaker {
                     state.state = CircuitState::Closed;
                     state.opened_at = None;
                     state.half_open_probe_in_flight = false;
-                    self.metrics.lock().expect("circuit metrics poisoned").clear();
+                    self.metrics
+                        .lock()
+                        .expect("circuit metrics poisoned")
+                        .clear();
                 }
                 RequestOutcome::Failure | RequestOutcome::Timeout => {
                     state.state = CircuitState::Open;
@@ -432,22 +446,24 @@ mod tests {
         let now = Instant::now();
 
         for _ in 0..3 {
-            let permit = breaker.try_acquire_permission_at(now).expect("closed circuit should allow");
+            let permit = breaker
+                .try_acquire_permission_at(now)
+                .expect("closed circuit should allow");
             breaker.record_result_at(
                 now,
                 permit,
-                Err(CircuitBreakerError::Downstream("upstream failed".to_string())),
+                Err(CircuitBreakerError::Downstream(
+                    "upstream failed".to_string(),
+                )),
             );
         }
 
         assert_eq!(breaker.state(), CircuitState::Closed);
 
-        let permit = breaker.try_acquire_permission_at(now).expect("closed circuit should allow");
-        breaker.record_result_at(
-            now,
-            permit,
-            Ok(()),
-        );
+        let permit = breaker
+            .try_acquire_permission_at(now)
+            .expect("closed circuit should allow");
+        breaker.record_result_at(now, permit, Ok(()));
 
         assert_eq!(breaker.state(), CircuitState::Open);
         assert_eq!(breaker.metrics().failure_count, 3);
@@ -460,7 +476,9 @@ mod tests {
         let now = Instant::now();
 
         for _ in 0..4 {
-            let permit = breaker.try_acquire_permission_at(now).expect("closed circuit should allow");
+            let permit = breaker
+                .try_acquire_permission_at(now)
+                .expect("closed circuit should allow");
             breaker.record_result_at(
                 now,
                 permit,
@@ -491,7 +509,9 @@ mod tests {
         let now = Instant::now();
 
         for _ in 0..4 {
-            let permit = breaker.try_acquire_permission_at(now).expect("closed circuit should allow");
+            let permit = breaker
+                .try_acquire_permission_at(now)
+                .expect("closed circuit should allow");
             breaker.record_result_at(
                 now,
                 permit,
@@ -516,7 +536,9 @@ mod tests {
         let now = Instant::now();
 
         for _ in 0..4 {
-            let permit = breaker.try_acquire_permission_at(now).expect("closed circuit should allow");
+            let permit = breaker
+                .try_acquire_permission_at(now)
+                .expect("closed circuit should allow");
             breaker.record_result_at(
                 now,
                 permit,
@@ -558,7 +580,9 @@ mod tests {
 
         let second = breaker
             .call(|| async {
-                Err::<(), _>(CircuitBreakerError::Downstream("upstream failed".to_string()))
+                Err::<(), _>(CircuitBreakerError::Downstream(
+                    "upstream failed".to_string(),
+                ))
             })
             .await;
         assert!(matches!(second, Err(CircuitBreakerError::Downstream(_))));

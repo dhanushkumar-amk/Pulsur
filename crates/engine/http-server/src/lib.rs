@@ -13,24 +13,24 @@
 //!   - `match_route` borrows `method` instead of consuming it.
 //!   - Active-connection decrement on TLS handshake failure is explicit, not accidental.
 
-use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncRead, AsyncWrite};
-use tokio::time::{timeout, Duration};
-use tokio::sync::Semaphore;
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex as StdMutex};
-use std::io::{BufReader, Cursor};
-use thiserror::Error;
-use tracing::{info, warn};
+use base64::Engine;
 use futures::future::BoxFuture;
 use napi_derive::napi;
 use serde::de::DeserializeOwned;
-use sha1::{Sha1, Digest};
-use base64::Engine;
+use sha1::{Digest, Sha1};
+use std::collections::HashMap;
+use std::io::{BufReader, Cursor};
+use std::str::FromStr;
+use std::sync::{Arc, Mutex as StdMutex};
+use thiserror::Error;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::TcpListener;
+use tokio::sync::Semaphore;
+use tokio::time::{timeout, Duration};
+use tracing::{info, warn};
 
-use tokio_rustls::TlsAcceptor;
 use rcgen::generate_simple_self_signed;
+use tokio_rustls::TlsAcceptor;
 
 // ──────────────────────────────────────────────────────────────
 //  Constants
@@ -86,14 +86,14 @@ impl FromStr for Method {
     type Err = HttpError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
-            "GET"     => Ok(Method::GET),
-            "POST"    => Ok(Method::POST),
-            "PUT"     => Ok(Method::PUT),
-            "DELETE"  => Ok(Method::DELETE),
-            "PATCH"   => Ok(Method::PATCH),
+            "GET" => Ok(Method::GET),
+            "POST" => Ok(Method::POST),
+            "PUT" => Ok(Method::PUT),
+            "DELETE" => Ok(Method::DELETE),
+            "PATCH" => Ok(Method::PATCH),
             "OPTIONS" => Ok(Method::OPTIONS),
-            "HEAD"    => Ok(Method::HEAD),
-            other     => Err(HttpError::Parse(format!("Unknown method: {}", other))),
+            "HEAD" => Ok(Method::HEAD),
+            other => Err(HttpError::Parse(format!("Unknown method: {}", other))),
         }
     }
 }
@@ -118,7 +118,7 @@ impl HttpVersion {
         match connection_header {
             // Explicit header always wins.
             Some(v) if v.eq_ignore_ascii_case("keep-alive") => true,
-            Some(v) if v.eq_ignore_ascii_case("close")      => false,
+            Some(v) if v.eq_ignore_ascii_case("close") => false,
             // No explicit header: use version default.
             _ => self == HttpVersion::Http11,
         }
@@ -143,8 +143,7 @@ pub struct Request {
 impl Request {
     /// Deserialize the body as JSON into type `T`.
     pub fn json<T: DeserializeOwned>(&self) -> Result<T, HttpError> {
-        serde_json::from_slice(&self.body)
-            .map_err(|e| HttpError::Serialization(e.to_string()))
+        serde_json::from_slice(&self.body).map_err(|e| HttpError::Serialization(e.to_string()))
     }
 
     /// Returns `true` when the request carries a WebSocket upgrade.
@@ -166,14 +165,18 @@ impl Response {
     pub fn new(status: u16) -> Self {
         let mut headers = HashMap::new();
         headers.insert("Server".to_string(), "Ferrum-Core/0.7.0".to_string());
-        Self { status, headers, body: Vec::new() }
+        Self {
+            status,
+            headers,
+            body: Vec::new(),
+        }
     }
 
     pub fn json<T: serde::Serialize>(status: u16, data: &T) -> Result<Self, HttpError> {
-        let body = serde_json::to_vec(data)
-            .map_err(|e| HttpError::Serialization(e.to_string()))?;
+        let body = serde_json::to_vec(data).map_err(|e| HttpError::Serialization(e.to_string()))?;
         let mut res = Self::new(status);
-        res.headers.insert("Content-Type".to_string(), "application/json".to_string());
+        res.headers
+            .insert("Content-Type".to_string(), "application/json".to_string());
         res.body = body;
         Ok(res)
     }
@@ -208,7 +211,7 @@ fn reason_phrase(status: u16) -> &'static str {
         502 => "Bad Gateway",
         503 => "Service Unavailable",
         504 => "Gateway Timeout",
-        _   => "Unknown",
+        _ => "Unknown",
     }
 }
 
@@ -229,7 +232,7 @@ pub struct WsContext {
     pub headers: HashMap<String, String>,
 }
 
-pub type Handler   = Arc<dyn Fn(Request) -> BoxFuture<'static, Response> + Send + Sync>;
+pub type Handler = Arc<dyn Fn(Request) -> BoxFuture<'static, Response> + Send + Sync>;
 pub type WsHandler = Arc<dyn Fn(WsContext, WebSocket) -> BoxFuture<'static, ()> + Send + Sync>;
 
 pub enum RouteTarget {
@@ -250,16 +253,34 @@ pub struct Router {
 }
 
 impl Router {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn add_http(&mut self, method: Method, path: &str, handler: Handler) {
-        let pattern = path.split('/').filter(|s| !s.is_empty()).map(str::to_string).collect();
-        self.routes.push(Route { method, pattern, target: RouteTarget::Http(handler) });
+        let pattern = path
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        self.routes.push(Route {
+            method,
+            pattern,
+            target: RouteTarget::Http(handler),
+        });
     }
 
     pub fn ws(&mut self, path: &str, handler: WsHandler) {
-        let pattern = path.split('/').filter(|s| !s.is_empty()).map(str::to_string).collect();
-        self.routes.push(Route { method: Method::GET, pattern, target: RouteTarget::WebSocket(handler) });
+        let pattern = path
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        self.routes.push(Route {
+            method: Method::GET,
+            pattern,
+            target: RouteTarget::WebSocket(handler),
+        });
     }
 
     /// FIX: original took `method: Method` by value, which consumes the enum.
@@ -270,17 +291,23 @@ impl Router {
         path: &str,
     ) -> Option<(&'a RouteTarget, HashMap<String, String>)> {
         for route in &self.routes {
-            if &route.method != method { continue; }
+            if &route.method != method {
+                continue;
+            }
 
             let mut params = HashMap::new();
 
             if path == "/" {
-                if route.pattern.is_empty() { return Some((&route.target, params)); }
+                if route.pattern.is_empty() {
+                    return Some((&route.target, params));
+                }
                 continue;
             }
 
             let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-            if route.pattern.len() != segments.len() { continue; }
+            if route.pattern.len() != segments.len() {
+                continue;
+            }
 
             let mut matched = true;
             for (p_seg, s_seg) in route.pattern.iter().zip(segments.iter()) {
@@ -291,7 +318,9 @@ impl Router {
                     break;
                 }
             }
-            if matched { return Some((&route.target, params)); }
+            if matched {
+                return Some((&route.target, params));
+            }
         }
         None
     }
@@ -313,7 +342,9 @@ pub struct WebSocket {
 }
 
 impl WebSocket {
-    pub fn new(stream: Box<dyn AsyncStream>) -> Self { Self { stream } }
+    pub fn new(stream: Box<dyn AsyncStream>) -> Self {
+        Self { stream }
+    }
 
     /// Send a UTF-8 text frame (opcode 0x1).
     pub async fn send_text(&mut self, text: &str) -> Result<(), HttpError> {
@@ -369,9 +400,9 @@ impl WebSocket {
             return Ok(None); // Connection closed.
         }
 
-        let fin     = header[0] & 0x80 != 0;
-        let opcode  = header[0] & 0x0F;
-        let masked  = header[1] & 0x80 != 0;
+        let fin = header[0] & 0x80 != 0;
+        let opcode = header[0] & 0x0F;
+        let masked = header[1] & 0x80 != 0;
         let raw_len = (header[1] & 0x7F) as usize;
 
         // Resolve the actual payload length.
@@ -425,8 +456,8 @@ impl WebSocket {
             }
             0xA => Ok(Some(WsMessage::Pong)),
             0x1 => {
-                let text = String::from_utf8(payload)
-                    .map_err(|e| HttpError::WebSocket(e.to_string()))?;
+                let text =
+                    String::from_utf8(payload).map_err(|e| HttpError::WebSocket(e.to_string()))?;
                 Ok(Some(WsMessage::Text(text)))
             }
             0x2 => Ok(Some(WsMessage::Binary(payload))),
@@ -435,7 +466,10 @@ impl WebSocket {
                 let _ = self.send_frame(0x88, &[]).await;
                 Ok(None)
             }
-            other => Err(HttpError::WebSocket(format!("Unknown opcode: {:#x}", other))),
+            other => Err(HttpError::WebSocket(format!(
+                "Unknown opcode: {:#x}",
+                other
+            ))),
         }
     }
 }
@@ -512,16 +546,13 @@ impl HttpServer {
     /// If either file does not exist, a self-signed development certificate is
     /// generated for `localhost` and `127.0.0.1` and written to those paths.
     pub fn load_tls(cert_path: &str, key_path: &str) -> Result<TlsAcceptor, HttpError> {
-        if !std::path::Path::new(cert_path).exists()
-            || !std::path::Path::new(key_path).exists()
-        {
+        if !std::path::Path::new(cert_path).exists() || !std::path::Path::new(key_path).exists() {
             warn!(
                 "TLS cert/key not found at '{}' / '{}'. Generating self-signed dev certificate.",
                 cert_path, key_path
             );
-            let cert = generate_simple_self_signed(
-                vec!["localhost".into(), "127.0.0.1".into()]
-            ).map_err(|e| HttpError::Tls(e.to_string()))?;
+            let cert = generate_simple_self_signed(vec!["localhost".into(), "127.0.0.1".into()])
+                .map_err(|e| HttpError::Tls(e.to_string()))?;
 
             std::fs::write(cert_path, cert.cert.pem())
                 .map_err(|e| HttpError::Tls(e.to_string()))?;
@@ -530,7 +561,7 @@ impl HttpServer {
         }
 
         let cert_bytes = std::fs::read(cert_path)?;
-        let key_bytes  = std::fs::read(key_path)?;
+        let key_bytes = std::fs::read(key_path)?;
 
         let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(cert_bytes)))
             .collect::<Result<Vec<_>, _>>()
@@ -559,9 +590,9 @@ impl HttpServer {
         cert_path: &str,
         key_path: &str,
     ) -> Result<(), HttpError> {
-        let http_listener  = TcpListener::bind(http_addr).await?;
+        let http_listener = TcpListener::bind(http_addr).await?;
         let https_listener = TcpListener::bind(https_addr).await?;
-        let tls_acceptor   = Self::load_tls(cert_path, key_path)?;
+        let tls_acceptor = Self::load_tls(cert_path, key_path)?;
 
         info!(
             "Ferrum listening: HTTP {} | HTTPS {}",
@@ -569,15 +600,18 @@ impl HttpServer {
         );
 
         // ── HTTP accept loop ──────────────────────────────────
-        let router_h    = self.router.clone();
-        let sem_h       = self.semaphore.clone();
-        let config_h    = self.config.clone();
+        let router_h = self.router.clone();
+        let sem_h = self.semaphore.clone();
+        let config_h = self.config.clone();
 
         let http_task = tokio::spawn(async move {
             loop {
                 let (stream, peer) = match http_listener.accept().await {
                     Ok(v) => v,
-                    Err(e) => { warn!("HTTP accept error: {}", e); continue; }
+                    Err(e) => {
+                        warn!("HTTP accept error: {}", e);
+                        continue;
+                    }
                 };
 
                 // `acquire_owned` returns a permit that auto-releases when dropped.
@@ -592,8 +626,8 @@ impl HttpServer {
                     }
                 };
 
-                let router  = router_h.clone();
-                let config  = config_h.clone();
+                let router = router_h.clone();
+                let config = config_h.clone();
 
                 tokio::spawn(async move {
                     let _ = handle_connection(Box::new(stream), router, config, peer).await;
@@ -603,15 +637,18 @@ impl HttpServer {
         });
 
         // ── HTTPS accept loop ─────────────────────────────────
-        let router_s  = self.router.clone();
-        let sem_s     = self.semaphore.clone();
-        let config_s  = self.config.clone();
+        let router_s = self.router.clone();
+        let sem_s = self.semaphore.clone();
+        let config_s = self.config.clone();
 
         let https_task = tokio::spawn(async move {
             loop {
                 let (stream, peer) = match https_listener.accept().await {
                     Ok(v) => v,
-                    Err(e) => { warn!("HTTPS accept error: {}", e); continue; }
+                    Err(e) => {
+                        warn!("HTTPS accept error: {}", e);
+                        continue;
+                    }
                 };
 
                 let permit = match sem_s.clone().try_acquire_owned() {
@@ -624,13 +661,14 @@ impl HttpServer {
                 };
 
                 let acceptor = tls_acceptor.clone();
-                let router   = router_s.clone();
-                let config   = config_s.clone();
+                let router = router_s.clone();
+                let config = config_s.clone();
 
                 tokio::spawn(async move {
                     match acceptor.accept(stream).await {
                         Ok(tls_stream) => {
-                            let _ = handle_connection(Box::new(tls_stream), router, config, peer).await;
+                            let _ =
+                                handle_connection(Box::new(tls_stream), router, config, peer).await;
                         }
                         Err(e) => {
                             warn!("TLS handshake failed from {}: {}", peer, e);
@@ -653,7 +691,10 @@ impl HttpServer {
         loop {
             let (stream, peer) = match listener.accept().await {
                 Ok(v) => v,
-                Err(e) => { warn!("Accept error: {}", e); continue; }
+                Err(e) => {
+                    warn!("Accept error: {}", e);
+                    continue;
+                }
             };
 
             let permit = match self.semaphore.clone().try_acquire_owned() {
@@ -688,13 +729,13 @@ async fn handle_connection(
     config: Arc<ServerConfig>,
     peer_addr: std::net::SocketAddr,
 ) -> Result<(), HttpError> {
-    let parse_timeout   = Duration::from_secs(config.parse_timeout_secs);
+    let parse_timeout = Duration::from_secs(config.parse_timeout_secs);
     let handler_timeout = Duration::from_secs(config.handler_timeout_secs);
 
     loop {
         // ── Parse phase ────────────────────────────────────────
         let req = match timeout(parse_timeout, parse_request(&mut stream, peer_addr)).await {
-            Ok(Ok(r))  => r,
+            Ok(Ok(r)) => r,
             Ok(Err(e)) => {
                 // Bad request — try to send a 400 before closing.
                 let _ = send_response(&mut stream, Response::new(400)).await;
@@ -707,9 +748,9 @@ async fn handle_connection(
         };
 
         // Determine keep-alive before req is moved.
-        let keep_alive = req.version.should_keep_alive(
-            req.headers.get("connection").map(String::as_str)
-        );
+        let keep_alive = req
+            .version
+            .should_keep_alive(req.headers.get("connection").map(String::as_str));
 
         // ── Routing ───────────────────────────────────────────
         match router.match_route(&req.method, &req.path) {
@@ -721,7 +762,7 @@ async fn handle_connection(
 
                 // ── Handler phase (with timeout) ───────────────
                 let res = match timeout(handler_timeout, handler(req)).await {
-                    Ok(r)  => r,
+                    Ok(r) => r,
                     Err(_) => Response::new(504), // Gateway Timeout
                 };
 
@@ -741,7 +782,7 @@ async fn handle_connection(
                 };
 
                 let accept_key = compute_ws_accept(&ws_key);
-                let handler    = handler.clone();
+                let handler = handler.clone();
                 let ctx = WsContext {
                     path: req.path.clone(),
                     params,
@@ -761,7 +802,9 @@ async fn handle_connection(
             }
         }
 
-        if !keep_alive { break; }
+        if !keep_alive {
+            break;
+        }
     }
 
     Ok(())
@@ -782,7 +825,7 @@ pub async fn parse_request(
     peer_addr: std::net::SocketAddr,
 ) -> Result<Request, HttpError> {
     let mut buf = vec![0u8; HEADER_BUF_SIZE];
-    let mut n   = 0usize;
+    let mut n = 0usize;
 
     // Fill the buffer until the header terminator `\r\n\r\n` is found.
     let header_end = loop {
@@ -811,10 +854,11 @@ pub async fn parse_request(
     // used first before reading more from the stream. The original code correctly
     // sliced these but only when Content-Length was present, so the pattern was
     // already right — made explicit here with a comment.
-    let body_start   = header_end + 4; // Skip past `\r\n\r\n`.
+    let body_start = header_end + 4; // Skip past `\r\n\r\n`.
     let already_read = n - body_start; // Bytes of body already in buf.
 
-    let body = if let Some(cl) = headers.get("content-length")
+    let body = if let Some(cl) = headers
+        .get("content-length")
         .and_then(|v| v.parse::<usize>().ok())
     {
         if cl > 32 * 1024 * 1024 {
@@ -833,7 +877,15 @@ pub async fn parse_request(
         Vec::new()
     };
 
-    Ok(Request { method, path, version, headers, params: HashMap::new(), body, peer_addr })
+    Ok(Request {
+        method,
+        path,
+        version,
+        headers,
+        params: HashMap::new(),
+        body,
+        peer_addr,
+    })
 }
 
 /// Parse the header section of an HTTP/1.x request synchronously.
@@ -860,12 +912,7 @@ pub fn parse_header_section(
     let version = match parts[2] {
         "HTTP/1.1" => HttpVersion::Http11,
         "HTTP/1.0" => HttpVersion::Http10,
-        v => {
-            return Err(HttpError::Parse(format!(
-                "Unsupported HTTP version: {}",
-                v
-            )))
-        }
+        v => return Err(HttpError::Parse(format!("Unsupported HTTP version: {}", v))),
     };
 
     // ── Headers ───────────────────────────────────────────────
@@ -894,15 +941,11 @@ pub async fn send_response(
     let reason = reason_phrase(response.status);
     let mut buf = Vec::new();
 
-    buf.extend_from_slice(
-        format!("HTTP/1.1 {} {}\r\n", response.status, reason).as_bytes()
-    );
+    buf.extend_from_slice(format!("HTTP/1.1 {} {}\r\n", response.status, reason).as_bytes());
     for (k, v) in &response.headers {
         buf.extend_from_slice(format!("{}: {}\r\n", k, v).as_bytes());
     }
-    buf.extend_from_slice(
-        format!("Content-Length: {}\r\n\r\n", response.body.len()).as_bytes()
-    );
+    buf.extend_from_slice(format!("Content-Length: {}\r\n\r\n", response.body.len()).as_bytes());
     buf.extend_from_slice(&response.body);
 
     stream.write_all(&buf).await?;
@@ -1150,7 +1193,7 @@ mod tests {
     #[test]
     fn ws_accept_key_matches_rfc_example() {
         // RFC 6455 section 1.3 test vector.
-        let key    = "dGhlIHNhbXBsZSBub25jZQ==";
+        let key = "dGhlIHNhbXBsZSBub25jZQ==";
         let expect = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
         assert_eq!(compute_ws_accept(key), expect);
     }
@@ -1182,7 +1225,11 @@ mod tests {
         // Read the full response after the writer side closes.
         client.read_to_end(&mut buf).await.unwrap();
         let text = String::from_utf8_lossy(&buf);
-        assert!(text.starts_with("HTTP/1.1 404 Not Found\r\n"), "Got: {}", &text[..40.min(text.len())]);
+        assert!(
+            text.starts_with("HTTP/1.1 404 Not Found\r\n"),
+            "Got: {}",
+            &text[..40.min(text.len())]
+        );
         assert!(text.contains("Content-Length: 9\r\n"));
     }
 }

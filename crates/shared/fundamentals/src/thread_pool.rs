@@ -72,7 +72,10 @@ impl Worker {
             }
         });
 
-        Self { _id: id, thread: Some(thread) }
+        Self {
+            _id: id,
+            thread: Some(thread),
+        }
     }
 }
 
@@ -121,10 +124,10 @@ mod tests {
     fn test_threadpool_parallelism() {
         let pool = ThreadPool::new(2);
         let start = std::time::Instant::now();
-        
+
         pool.execute(|| thread::sleep(Duration::from_millis(50)));
         pool.execute(|| thread::sleep(Duration::from_millis(50)));
-        
+
         // This should take ~50ms if parallel, ~100ms if sequential
         thread::sleep(Duration::from_millis(70));
         assert!(start.elapsed() < Duration::from_millis(200));
@@ -134,14 +137,14 @@ mod tests {
     fn test_threadpool_large_workload() {
         let pool = ThreadPool::new(8);
         let counter = Arc::new(AtomicUsize::new(0));
-        
+
         for _ in 0..1000 {
             let c = Arc::clone(&counter);
             pool.execute(move || {
                 c.fetch_add(1, Ordering::SeqCst);
             });
         }
-        
+
         thread::sleep(Duration::from_millis(200));
         assert_eq!(counter.load(Ordering::SeqCst), 1000);
     }

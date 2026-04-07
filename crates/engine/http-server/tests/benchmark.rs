@@ -2,9 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures::future::FutureExt;
-use http_server::{
-    parse_request, send_response, AsyncStream, Method, Request, Response, Router,
-};
+use http_server::{parse_request, send_response, AsyncStream, Method, Request, Response, Router};
 use tokio::io::AsyncWriteExt;
 
 fn build_router() -> Router {
