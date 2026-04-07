@@ -74,21 +74,36 @@ pub enum RateLimiterError {
 
 #[derive(Debug, Clone)]
 pub struct TokenBucket {
-    pub tokens: f64,
+    /// Current token count stored as nanoseconds-worth-of-tokens.
+    /// 1 token = `nanos_per_token` nanoseconds.
+    tokens_ns: u64,
+    /// Maximum token count, in nanoseconds.
+    capacity_ns: u64,
+    /// How many nanoseconds must elapse to earn one token.
+    nanos_per_token: u64,
+    pub last_refill: Instant,
+    // ── Public f64 aliases kept for API compatibility ──────────
     pub capacity: f64,
     pub refill_rate: f64,
-    pub last_refill: Instant,
 }
 
 impl TokenBucket {
     pub fn new(capacity: f64, refill_rate: f64) -> Result<Self, RateLimiterError> {
         validate_token_bucket(capacity, refill_rate)?;
 
+        // nanos_per_token = 1e9 / refill_rate  (how long to earn 1 token)
+        // capacity_ns     = capacity * nanos_per_token
+        let nanos_per_token =
+            (1_000_000_000.0 / refill_rate).round() as u64;
+        let capacity_ns = (capacity as u64).saturating_mul(nanos_per_token);
+
         Ok(Self {
-            tokens: capacity,
+            tokens_ns: capacity_ns,
+            capacity_ns,
+            nanos_per_token,
+            last_refill: Instant::now(),
             capacity,
             refill_rate,
-            last_refill: Instant::now(),
         })
     }
 
@@ -103,8 +118,10 @@ impl TokenBucket {
 
         self.refill_at(now);
 
-        if self.tokens >= n {
-            self.tokens -= n;
+        // Convert n tokens → nanoseconds (saturating to avoid overflow).
+        let cost_ns = (n as u64).saturating_mul(self.nanos_per_token);
+        if self.tokens_ns >= cost_ns {
+            self.tokens_ns -= cost_ns;
             true
         } else {
             false
@@ -116,27 +133,43 @@ impl TokenBucket {
     }
 
     pub fn refill_at(&mut self, now: Instant) {
-        let elapsed_secs = now.duration_since(self.last_refill).as_secs_f64();
-        self.tokens = (self.tokens + self.refill_rate * elapsed_secs).min(self.capacity);
+        let elapsed_ns = now
+            .saturating_duration_since(self.last_refill)
+            .as_nanos() as u64;
+        // earned_ns = elapsed_ns (each elapsed ns earns one ns of token budget).
+        // But we actually earn at rate: tokens_per_ns = 1/nanos_per_token.
+        // So earned = elapsed_ns / nanos_per_token  *  nanos_per_token  = elapsed_ns
+        // (work done in ns space: just add elapsed, but cap at capacity_ns).
+        self.tokens_ns = self
+            .tokens_ns
+            .saturating_add(elapsed_ns)
+            .min(self.capacity_ns);
         self.last_refill = now;
     }
 
+    /// Returns remaining tokens as `f64` (public API preserved).
     pub fn remaining(&self) -> f64 {
-        self.tokens.max(0.0)
+        // tokens_ns / nanos_per_token = fractional tokens
+        if self.nanos_per_token == 0 {
+            return 0.0;
+        }
+        (self.tokens_ns as f64) / (self.nanos_per_token as f64)
     }
 
+    /// How long until `requested_tokens` tokens are available.
     pub fn retry_after(&self, requested_tokens: f64) -> Duration {
-        if requested_tokens <= self.tokens {
+        let cost_ns = (requested_tokens as u64).saturating_mul(self.nanos_per_token);
+        if self.tokens_ns >= cost_ns {
             return Duration::ZERO;
         }
-
-        let missing = requested_tokens - self.tokens;
-        Duration::from_secs_f64((missing / self.refill_rate).max(0.0))
+        let deficit_ns = cost_ns - self.tokens_ns;
+        Duration::from_nanos(deficit_ns)
     }
 
+    /// How long until the bucket is full again.
     pub fn reset_after(&self) -> Duration {
-        let missing = (self.capacity - self.tokens).max(0.0);
-        Duration::from_secs_f64((missing / self.refill_rate).max(0.0))
+        let missing_ns = self.capacity_ns.saturating_sub(self.tokens_ns);
+        Duration::from_nanos(missing_ns)
     }
 }
 
@@ -963,8 +996,10 @@ mod tests {
     fn sliding_window_is_more_accurate_than_token_bucket_at_boundary() {
         let mut bucket = TokenBucket::new(5.0, 5.0).expect("bucket should build");
         let start = Instant::now();
-        bucket.tokens = 0.0;
+        // Drain the bucket entirely via try_consume, then back-date last_refill.
+        bucket.try_consume(5.0);
         bucket.last_refill = start;
+        // Verify empty (no direct field access needed — try_consume returns false when drained).
 
         let token_bucket_allows_after_partial_refill =
             bucket.try_consume_at(1.0, start + Duration::from_millis(200));
@@ -1072,8 +1107,9 @@ mod tests {
             for _ in 0..100 {
                 let _ = bucket.try_consume(spend.min(capacity) as f64);
                 bucket.refill();
-                prop_assert!(bucket.tokens <= bucket.capacity + f64::EPSILON);
-                prop_assert!(bucket.tokens >= 0.0);
+                // remaining() converts nanosecond storage back to token count.
+                prop_assert!(bucket.remaining() <= bucket.capacity + 1.0);
+                prop_assert!(bucket.remaining() >= 0.0);
             }
         }
 

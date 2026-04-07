@@ -203,13 +203,13 @@ impl BackendPool {
 
     /// Adds a backend to the pool.
     pub fn add(&self, backend: Backend) {
-        let mut backends = self.backends.write().expect("backend pool poisoned");
+        let mut backends = self.backends.write().unwrap_or_else(|e| e.into_inner());
         backends.push(Arc::new(backend));
     }
 
     /// Removes a backend from the pool by address.
     pub fn remove(&self, address: &str) {
-        let mut backends = self.backends.write().expect("backend pool poisoned");
+        let mut backends = self.backends.write().unwrap_or_else(|e| e.into_inner());
         backends.retain(|backend| backend.address != address);
         self.sessions
             .retain(|_, entry| entry.backend_index < backends.len());
@@ -239,8 +239,10 @@ impl BackendPool {
             backend_for_task.active_conns.load(Ordering::Relaxed)
         );
 
-        std::thread::spawn(move || {
-            let started_at = Instant::now();
+        // Use tokio::spawn so the drain loop runs on the async runtime;
+        // tokio::time::sleep avoids blocking a thread-pool thread.
+        tokio::spawn(async move {
+            let started_at = tokio::time::Instant::now();
 
             loop {
                 let active_conns = backend_for_task.active_conns.load(Ordering::Relaxed);
@@ -267,7 +269,8 @@ impl BackendPool {
                     address, active_conns
                 );
 
-                std::thread::sleep(pool.config.drain_log_interval);
+                // Non-blocking sleep: yields to the tokio scheduler.
+                tokio::time::sleep(pool.config.drain_log_interval).await;
             }
         });
 
@@ -515,7 +518,7 @@ impl BackendPool {
     fn backend_index_by_address(&self, address: &str) -> Option<usize> {
         self.backends
             .read()
-            .expect("backend pool poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .position(|backend| backend.address == address)
     }
@@ -523,7 +526,7 @@ impl BackendPool {
     fn backend_by_address(&self, address: &str) -> Option<Arc<Backend>> {
         self.backends
             .read()
-            .expect("backend pool poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .find(|backend| backend.address == address)
             .cloned()
@@ -532,7 +535,7 @@ impl BackendPool {
     pub fn backends_snapshot(&self) -> Vec<Arc<Backend>> {
         self.backends
             .read()
-            .expect("backend pool poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .cloned()
             .collect()

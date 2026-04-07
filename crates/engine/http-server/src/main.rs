@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server = HttpServer::new(router, config);
 
     println!("Starting server on http://127.0.0.1:8080");
-    server.run("127.0.0.1:8080").await?;
+    server.run_until_sigterm("127.0.0.1:8080").await?;
 
     Ok(())
 }

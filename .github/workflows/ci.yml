@@ -29,6 +29,17 @@ jobs:
         
       - name: Run tests
         run: cargo test --workspace --all-targets --features noop
+
+      - name: Run cargo audit
+        run: |
+          cargo install --locked cargo-audit
+          cargo audit
+
+      - name: Run coverage check
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install --locked cargo-llvm-cov
+          cargo llvm-cov --workspace --all-targets --features noop --fail-under-lines 70
         
       - name: Run rustfmt check
         run: cargo fmt --all -- --check

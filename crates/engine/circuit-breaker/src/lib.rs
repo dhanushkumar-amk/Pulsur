@@ -221,13 +221,13 @@ impl CircuitBreaker {
     }
 
     pub fn state(&self) -> CircuitState {
-        self.state.lock().expect("circuit state poisoned").state
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).state
     }
 
     pub fn metrics(&self) -> CircuitMetricsSnapshot {
         self.metrics
             .lock()
-            .expect("circuit metrics poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .snapshot()
     }
 
@@ -290,7 +290,7 @@ impl CircuitBreaker {
         &self,
         now: Instant,
     ) -> Result<ExecutionPermit, CircuitBreakerError> {
-        let mut guard = self.state.lock().expect("circuit state poisoned");
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
 
         if guard.state == CircuitState::Open
             && guard
@@ -332,12 +332,12 @@ impl CircuitBreaker {
         };
 
         let metrics = {
-            let mut metrics = self.metrics.lock().expect("circuit metrics poisoned");
+            let mut metrics = self.metrics.lock().unwrap_or_else(|e| e.into_inner());
             metrics.record(outcome);
             metrics.snapshot()
         };
 
-        let mut state = self.state.lock().expect("circuit state poisoned");
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match permit {
             ExecutionPermit::Closed => {
                 if metrics.total_requests >= self.config.minimum_requests
@@ -355,7 +355,7 @@ impl CircuitBreaker {
                     state.half_open_probe_in_flight = false;
                     self.metrics
                         .lock()
-                        .expect("circuit metrics poisoned")
+                        .unwrap_or_else(|e| e.into_inner())
                         .clear();
                 }
                 RequestOutcome::Failure | RequestOutcome::Timeout => {
@@ -379,14 +379,14 @@ impl CircuitBreakerRegistry {
     }
 
     pub fn register(&self, breaker: Arc<CircuitBreaker>) {
-        let mut guard = self.circuits.write().expect("circuit registry poisoned");
+        let mut guard = self.circuits.write().unwrap_or_else(|e| e.into_inner());
         guard.insert(breaker.name().to_string(), breaker);
     }
 
     pub fn get(&self, name: &str) -> Option<Arc<CircuitBreaker>> {
         self.circuits
             .read()
-            .expect("circuit registry poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .get(name)
             .cloned()
     }

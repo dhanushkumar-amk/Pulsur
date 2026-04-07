@@ -624,7 +624,8 @@ pub fn replay_wal_from_bytes(data: &[u8], queue: &mut Queue) -> Result<(), WalEr
 #[cfg(not(feature = "noop"))]
 #[derive(Debug)]
 struct SharedQueueHandle {
-    queue: std::sync::Mutex<Queue>,
+    // tokio::sync::Mutex: guard is Send + held across .await is safe
+    queue: tokio::sync::Mutex<Queue>,
 }
 
 #[cfg(not(feature = "noop"))]
@@ -681,7 +682,7 @@ impl JsQueue {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(SharedQueueHandle {
-                queue: std::sync::Mutex::new(Queue::new()),
+                queue: tokio::sync::Mutex::new(Queue::new()),
             }),
         }
     }
@@ -694,7 +695,7 @@ impl JsQueue {
         max_attempts: Option<u32>,
     ) -> napi::Result<JsQueueJob> {
         let job = Job::new(queue, payload_json.into_bytes(), max_attempts.unwrap_or(3));
-        let mut guard = self.lock_queue()?;
+        let mut guard = self.lock_queue().await; // tokio::sync::Mutex::lock never fails
         guard.enqueue(job.clone());
         Ok(job.into())
     }
@@ -716,14 +717,14 @@ impl JsQueue {
             max_attempts.unwrap_or(3),
             run_at,
         );
-        let mut guard = self.lock_queue()?;
+        let mut guard = self.lock_queue().await;
         guard.enqueue(job.clone());
         Ok(job.into())
     }
 
     #[napi]
     pub async fn dequeue(&self, queue: Option<String>) -> napi::Result<Option<JsQueueJob>> {
-        let mut guard = self.lock_queue()?;
+        let mut guard = self.lock_queue().await;
         let job = match queue {
             Some(queue_name) => guard.dequeue_for_queue(&queue_name),
             None => guard.dequeue(),
@@ -734,7 +735,7 @@ impl JsQueue {
     #[napi]
     pub async fn ack(&self, id: String) -> napi::Result<JsQueueJob> {
         let id = parse_uuid(&id)?;
-        let mut guard = self.lock_queue()?;
+        let mut guard = self.lock_queue().await;
         guard
             .ack(id)
             .map(Into::into)
@@ -744,7 +745,7 @@ impl JsQueue {
     #[napi]
     pub async fn nack(&self, id: String, reason: String) -> napi::Result<JsQueueJob> {
         let id = parse_uuid(&id)?;
-        let mut guard = self.lock_queue()?;
+        let mut guard = self.lock_queue().await;
         guard
             .nack(id, reason)
             .map(Into::into)
@@ -753,7 +754,7 @@ impl JsQueue {
 
     #[napi]
     pub async fn stats(&self) -> napi::Result<JsQueueStats> {
-        let mut guard = self.lock_queue()?;
+        let mut guard = self.lock_queue().await;
         let _ = guard.promote_ready_jobs(Utc::now());
         Ok(JsQueueStats {
             pending: guard.pending_len() as u32,
@@ -772,11 +773,9 @@ impl JsQueue {
         }
     }
 
-    fn lock_queue(&self) -> napi::Result<std::sync::MutexGuard<'_, Queue>> {
-        self.inner
-            .queue
-            .lock()
-            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))
+    // tokio::sync::Mutex::lock is infallible (no poisoning), returns an async guard
+    async fn lock_queue(&self) -> tokio::sync::MutexGuard<'_, Queue> {
+        self.inner.queue.lock().await
     }
 }
 
@@ -799,11 +798,8 @@ pub struct JsWorker {
 impl JsWorker {
     #[napi]
     pub async fn poll_once(&self) -> napi::Result<Option<JsQueueJob>> {
-        let mut guard = self
-            .inner
-            .queue
-            .lock()
-            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))?;
+        // tokio mutex: guard is Send, safe to hold in async context
+        let mut guard = self.inner.queue.lock().await;
         let job = match &self.queue {
             Some(queue_name) => guard.dequeue_for_queue(queue_name),
             None => guard.dequeue(),
@@ -814,11 +810,7 @@ impl JsWorker {
     #[napi]
     pub async fn ack(&self, id: String) -> napi::Result<JsQueueJob> {
         let id = parse_uuid(&id)?;
-        let mut guard = self
-            .inner
-            .queue
-            .lock()
-            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))?;
+        let mut guard = self.inner.queue.lock().await;
         guard
             .ack(id)
             .map(Into::into)
@@ -828,11 +820,7 @@ impl JsWorker {
     #[napi]
     pub async fn nack(&self, id: String, reason: String) -> napi::Result<JsQueueJob> {
         let id = parse_uuid(&id)?;
-        let mut guard = self
-            .inner
-            .queue
-            .lock()
-            .map_err(|_| napi::Error::from_reason("queue mutex poisoned".to_string()))?;
+        let mut guard = self.inner.queue.lock().await;
         guard
             .nack(id, reason)
             .map(Into::into)

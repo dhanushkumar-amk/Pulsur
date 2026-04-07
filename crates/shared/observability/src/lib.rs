@@ -129,7 +129,7 @@ impl ObservabilityAgent {
     }
 
     pub fn snapshot(&self) -> MetricsSnapshot {
-        let mut guard = self.state.write().expect("observability state poisoned");
+        let mut guard = self.state.write().unwrap_or_else(|e| e.into_inner());
         prune_state(&mut guard);
 
         let now_ms = now_ms();
@@ -173,7 +173,7 @@ impl ObservabilityAgent {
         histogram!("request_duration_ms", "component" => component.to_string()).record(duration_ms);
 
         let now = Instant::now();
-        let mut guard = self.state.write().expect("observability state poisoned");
+        let mut guard = self.state.write().unwrap_or_else(|e| e.into_inner());
         guard.request_count = guard.request_count.saturating_add(1);
         guard.request_times.push_back(now);
         guard.latency_samples.push_back((now, duration_ms));
@@ -189,7 +189,7 @@ impl ObservabilityAgent {
 
     pub fn set_active_connections(&self, component: &str, connections: i64) {
         gauge!("active_connections", "component" => component.to_string()).set(connections as f64);
-        let mut guard = self.state.write().expect("observability state poisoned");
+        let mut guard = self.state.write().unwrap_or_else(|e| e.into_inner());
         guard
             .active_connections
             .insert(component.to_string(), connections.max(0));
@@ -197,14 +197,14 @@ impl ObservabilityAgent {
 
     pub fn set_queue_depth(&self, queue: &str, depth: i64) {
         gauge!("queue_depth", "queue" => queue.to_string()).set(depth as f64);
-        let mut guard = self.state.write().expect("observability state poisoned");
+        let mut guard = self.state.write().unwrap_or_else(|e| e.into_inner());
         guard.queue_depths.insert(queue.to_string(), depth.max(0));
     }
 
     pub fn set_cache_hit_rate(&self, component: &str, hit_rate: f64) {
         let bounded = hit_rate.clamp(0.0, 1.0);
         gauge!("cache_hit_rate", "component" => component.to_string()).set(bounded);
-        let mut guard = self.state.write().expect("observability state poisoned");
+        let mut guard = self.state.write().unwrap_or_else(|e| e.into_inner());
         guard.cache_hit_rates.insert(component.to_string(), bounded);
     }
 
@@ -215,7 +215,7 @@ impl ObservabilityAgent {
         detail: impl Into<String>,
     ) {
         let now_ms = now_ms();
-        let mut guard = self.state.write().expect("observability state poisoned");
+        let mut guard = self.state.write().unwrap_or_else(|e| e.into_inner());
         guard.component_health.insert(
             component.to_string(),
             ComponentHealth {
@@ -229,7 +229,7 @@ impl ObservabilityAgent {
 
     #[cfg(test)]
     fn reset(&self) {
-        let mut guard = self.state.write().expect("observability state poisoned");
+        let mut guard = self.state.write().unwrap_or_else(|e| e.into_inner());
         *guard = MutableState::default();
     }
 }

@@ -30,6 +30,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tokio::time::{timeout, Duration};
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use rcgen::generate_simple_self_signed;
@@ -687,36 +688,103 @@ impl HttpServer {
     }
 
     /// Start a plain HTTP server on a single address (no TLS).
-    pub async fn run(&self, addr: &str) -> Result<(), HttpError> {
+    ///
+    /// Accepts a [`CancellationToken`] that triggers graceful shutdown.
+    /// On SIGTERM the accept loop stops and this function waits for every
+    /// in-flight connection to finish before returning.
+    pub async fn run(
+        &self,
+        addr: &str,
+        shutdown: CancellationToken,
+    ) -> Result<(), HttpError> {
         let listener = TcpListener::bind(addr).await?;
         info!("Ferrum listening: HTTP {}", addr);
 
+        // Clone the semaphore so we can wait for all permits after shutdown.
+        let sem = self.semaphore.clone();
+        let max_conns = self.config.max_conns;
+
         loop {
-            let (stream, peer) = match listener.accept().await {
-                Ok(v) => v,
-                Err(e) => {
-                    warn!("Accept error: {}", e);
-                    continue;
+            tokio::select! {
+                // ── Graceful shutdown triggered ───────────────────────────
+                _ = shutdown.cancelled() => {
+                    info!("shutdown signal received; draining in-flight connections");
+                    // Acquire ALL permits — this blocks until every spawned task
+                    // has dropped its OwnedSemaphorePermit.
+                    let _ = sem.acquire_many(max_conns as u32).await;
+                    info!("all connections drained; HTTP server stopped");
+                    return Ok(());
                 }
-            };
 
-            let permit = match self.semaphore.clone().try_acquire_owned() {
-                Ok(p) => p,
-                Err(_) => {
-                    warn!("Max connections reached, rejecting {}", peer);
-                    drop(stream);
-                    continue;
+                // ── Accept a new connection ───────────────────────────────
+                accept = listener.accept() => {
+                    let (stream, peer) = match accept {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!("Accept error: {}", e);
+                            continue;
+                        }
+                    };
+
+                    // Don't accept new connections if we're shutting down.
+                    if shutdown.is_cancelled() {
+                        drop(stream);
+                        continue;
+                    }
+
+                    let permit = match self.semaphore.clone().try_acquire_owned() {
+                        Ok(p) => p,
+                        Err(_) => {
+                            warn!("Max connections reached, rejecting {}", peer);
+                            drop(stream);
+                            continue;
+                        }
+                    };
+
+                    let router = self.router.clone();
+                    let config = self.config.clone();
+                    let token = shutdown.clone();
+
+                    tokio::spawn(async move {
+                        tokio::select! {
+                            // Run the connection normally.
+                            _ = handle_connection(Box::new(stream), router, config, peer) => {}
+                            // If shutdown fires mid-request, abort immediately.
+                            _ = token.cancelled() => {}
+                        }
+                        drop(permit); // Return the slot — unblocks acquire_many above.
+                    });
                 }
-            };
-
-            let router = self.router.clone();
-            let config = self.config.clone();
-
-            tokio::spawn(async move {
-                let _ = handle_connection(Box::new(stream), router, config, peer).await;
-                drop(permit);
-            });
+            }
         }
+    }
+
+    /// Convenience: run with a SIGTERM-wired token (Unix only; no-op on Windows
+    /// where SIGTERM is not a real signal but the process is killed outright).
+    pub async fn run_until_sigterm(&self, addr: &str) -> Result<(), HttpError> {
+        let token = CancellationToken::new();
+        let token_clone = token.clone();
+
+        // Wire OS SIGTERM → token cancellation.
+        #[cfg(unix)]
+        tokio::spawn(async move {
+            use tokio::signal::unix::{signal, SignalKind};
+            if let Ok(mut stream) = signal(SignalKind::terminate()) {
+                stream.recv().await;
+                info!("SIGTERM received; initiating graceful shutdown");
+                token_clone.cancel();
+            }
+        });
+
+        // On non-Unix platforms fall back to Ctrl-C.
+        #[cfg(not(unix))]
+        tokio::spawn(async move {
+            let _ = tokio::signal::ctrl_c().await;
+            info!("Ctrl-C received; initiating graceful shutdown");
+            token_clone.cancel();
+        });
+
+        self.run(addr, token).await
     }
 }
 
@@ -853,24 +921,28 @@ pub async fn parse_request(
     let (method, path, version, headers) = parse_header_section(header_section)?;
 
     // ── Body ──────────────────────────────────────────────────
-    // FIX: bytes after `\r\n\r\n` that arrived in the same buffer read must be
-    // used first before reading more from the stream. The original code correctly
-    // sliced these but only when Content-Length was present, so the pattern was
-    // already right — made explicit here with a comment.
+    // Bytes after `\r\n\r\n` that arrived in the same read as the headers;
+    // these must be consumed before touching the stream again.
     let body_start = header_end + 4; // Skip past `\r\n\r\n`.
-    let already_read = n - body_start; // Bytes of body already in buf.
+    let already_in_buf = &buf[body_start..n];
 
-    let body = if let Some(cl) = headers
+    let te = headers
+        .get("transfer-encoding")
+        .map(|v| v.to_ascii_lowercase());
+
+    let body = if te.as_deref() == Some("chunked") {
+        // RFC 7230 §4.1 — chunked transfer encoding.
+        read_chunked_body(stream, already_in_buf).await?
+    } else if let Some(cl) = headers
         .get("content-length")
         .and_then(|v| v.parse::<usize>().ok())
     {
         if cl > 32 * 1024 * 1024 {
             return Err(HttpError::PayloadTooLarge);
         }
+        let already_read = already_in_buf.len().min(cl);
         let mut body = Vec::with_capacity(cl);
-        // Re-use whatever body bytes landed in the header buffer.
-        body.extend_from_slice(&buf[body_start..body_start + already_read.min(cl)]);
-        // Read remaining bytes if the body didn't fully arrive yet.
+        body.extend_from_slice(&already_in_buf[..already_read]);
         if body.len() < cl {
             body.resize(cl, 0);
             stream.read_exact(&mut body[already_read..]).await?;
@@ -889,6 +961,94 @@ pub async fn parse_request(
         body,
         peer_addr,
     })
+}
+
+/// Read a chunked body per RFC 7230 §4.1.
+///
+/// `pre` holds bytes that arrived in the same TCP segment as the headers.
+/// Each chunk is: `<hex-size>[;ext]\r\n<data>\r\n`
+/// Terminated by:  `0\r\n\r\n`
+async fn read_chunked_body(
+    stream: &mut Box<dyn AsyncStream>,
+    pre: &[u8],
+) -> Result<Vec<u8>, HttpError> {
+    const MAX_BODY: usize = 32 * 1024 * 1024;
+
+    let mut pre_pos = 0usize;
+    let mut body = Vec::new();
+
+    // Read a single byte: from the pre-buffer first, otherwise from stream.
+    async fn next_byte(
+        stream: &mut Box<dyn AsyncStream>,
+        pre: &[u8],
+        pre_pos: &mut usize,
+    ) -> Result<u8, HttpError> {
+        if *pre_pos < pre.len() {
+            let b = pre[*pre_pos];
+            *pre_pos += 1;
+            Ok(b)
+        } else {
+            let mut tmp = [0u8; 1];
+            stream.read_exact(&mut tmp).await?;
+            Ok(tmp[0])
+        }
+    }
+
+    loop {
+        // Read the chunk-size line (CRLF-terminated), ignore chunk-extensions.
+        let mut line: Vec<u8> = Vec::new();
+        loop {
+            let b = next_byte(stream, pre, &mut pre_pos).await?;
+            if b == b'\n' {
+                break;
+            }
+            if b != b'\r' {
+                line.push(b);
+            }
+        }
+
+        // Strip optional chunk-extensions (`;ext=val`).
+        let size_part = line.split(|&b| b == b';').next().unwrap_or(&line);
+        let size_str = std::str::from_utf8(size_part)
+            .map_err(|_| HttpError::Parse("Chunk size is not valid UTF-8".into()))?
+            .trim();
+        let chunk_size = usize::from_str_radix(size_str, 16)
+            .map_err(|_| HttpError::Parse(format!("Invalid chunk size: {:?}", size_str)))?;
+
+        if chunk_size == 0 {
+            // Terminal chunk: consume the trailing CRLF of `0\r\n\r\n`.
+            let _cr = next_byte(stream, pre, &mut pre_pos).await?;
+            let _lf = next_byte(stream, pre, &mut pre_pos).await?;
+            break;
+        }
+
+        if body.len() + chunk_size > MAX_BODY {
+            return Err(HttpError::PayloadTooLarge);
+        }
+
+        // Append `chunk_size` bytes to body.
+        let old_len = body.len();
+        body.resize(old_len + chunk_size, 0);
+        let mut filled = 0;
+        while filled < chunk_size {
+            if pre_pos < pre.len() {
+                let take = (pre.len() - pre_pos).min(chunk_size - filled);
+                body[old_len + filled..old_len + filled + take]
+                    .copy_from_slice(&pre[pre_pos..pre_pos + take]);
+                pre_pos += take;
+                filled += take;
+            } else {
+                stream.read_exact(&mut body[old_len + filled..]).await?;
+                filled = chunk_size;
+            }
+        }
+
+        // Consume the CRLF that follows the chunk data.
+        let _cr = next_byte(stream, pre, &mut pre_pos).await?;
+        let _lf = next_byte(stream, pre, &mut pre_pos).await?;
+    }
+
+    Ok(body)
 }
 
 /// Parse the header section of an HTTP/1.x request synchronously.
@@ -991,9 +1151,28 @@ fn compute_ws_accept(key: &str) -> String {
 }
 
 #[cfg(not(feature = "noop"))]
+#[napi(object)]
+pub struct JsRequest {
+    pub method: String,
+    pub path: String,
+    pub headers: HashMap<String, String>,
+    pub params: HashMap<String, String>,
+    pub body: napi::Either<Vec<u8>, String>,
+}
+
+#[cfg(not(feature = "noop"))]
+#[napi(object)]
+pub struct JsResponse {
+    pub status: u16,
+    pub headers: Option<HashMap<String, String>>,
+    pub body: Option<napi::Either<Vec<u8>, String>>,
+}
+
+#[cfg(not(feature = "noop"))]
 struct BridgeServerState {
-    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
-    task: Option<tokio::task::JoinHandle<()>>,
+    router: Router,
+    shutdown: Option<CancellationToken>,
+    task: Option<tokio::task::JoinHandle<Result<(), HttpError>>>,
     port: Option<u16>,
 }
 
@@ -1010,6 +1189,7 @@ impl JsServer {
     pub fn new() -> Self {
         Self {
             state: Arc::new(StdMutex::new(BridgeServerState {
+                router: Router::new(),
                 shutdown: None,
                 task: None,
                 port: None,
@@ -1018,79 +1198,121 @@ impl JsServer {
     }
 
     #[napi]
-    pub async fn listen(&self, port: u16) -> napi::Result<()> {
-        {
-            let state = self
-                .state
-                .lock()
-                .map_err(|_| napi::Error::from_reason("server state poisoned".to_string()))?;
-            if state.task.is_some() {
-                return Err(napi::Error::from_reason(
-                    "server is already listening".to_string(),
-                ));
-            }
-        }
+    pub fn get(&self, path: String, #[napi(ts_arg_type = "(req: any) => Promise<any> | any")] handler: napi::JsFunction) -> napi::Result<()> {
+        self.register_route(Method::GET, path, handler)
+    }
 
-        let listener = TcpListener::bind(("127.0.0.1", port))
-            .await
-            .map_err(|err| napi::Error::from_reason(err.to_string()))?;
-        let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    #[napi]
+    pub fn post(&self, path: String, #[napi(ts_arg_type = "(req: any) => Promise<any> | any")] handler: napi::JsFunction) -> napi::Result<()> {
+        self.register_route(Method::POST, path, handler)
+    }
 
-        let task = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = &mut shutdown_rx => {
-                        break;
-                    }
-                    accept = listener.accept() => {
-                        let Ok((mut socket, _peer)) = accept else {
-                            break;
-                        };
-                        tokio::spawn(async move {
-                            let mut buffer = [0u8; 1024];
-                            let bytes_read = socket.read(&mut buffer).await.unwrap_or(0);
-                            let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-                            let body = if request.starts_with("GET /health") {
-                                r#"{"ok":true,"service":"ferrum-http"}"#
-                            } else {
-                                r#"{"ok":true,"message":"Ferrum JS bridge server"}"#
+    #[napi]
+    pub fn put(&self, path: String, #[napi(ts_arg_type = "(req: any) => Promise<any> | any")] handler: napi::JsFunction) -> napi::Result<()> {
+        self.register_route(Method::PUT, path, handler)
+    }
+
+    #[napi]
+    pub fn delete(&self, path: String, #[napi(ts_arg_type = "(req: any) => Promise<any> | any")] handler: napi::JsFunction) -> napi::Result<()> {
+        self.register_route(Method::DELETE, path, handler)
+    }
+
+    fn register_route(&self, method: Method, path: String, handler: napi::JsFunction) -> napi::Result<()> {
+        use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+
+        let tsfn: ThreadsafeFunction<Request, ErrorStrategy::Fatal> = handler
+            .create_threadsafe_function(0, |ctx| {
+                let req = ctx.value;
+                let js_req = JsRequest {
+                    method: format!("{:?}", req.method),
+                    path: req.path,
+                    headers: req.headers,
+                    params: req.params,
+                    body: napi::Either::A(req.body),
+                };
+                Ok(vec![js_req])
+            })?;
+
+        let mut state = self.state.lock().map_err(|_| napi::Error::from_reason("Poisoned"))?;
+        
+        let handler_wrapper: Handler = Arc::new(move |req| {
+            let tsfn = tsfn.clone();
+            use futures::FutureExt;
+            async move {
+                let js_res_result: Result<JsResponse, _> = tsfn.call_async(req).await;
+                match js_res_result {
+                    Ok(js_res) => {
+                        let mut res = Response::new(js_res.status);
+                        if let Some(h) = js_res.headers {
+                            res.headers.extend(h);
+                        }
+                        if let Some(body) = js_res.body {
+                            res.body = match body {
+                                napi::Either::A(bin) => bin,
+                                napi::Either::B(s) => s.into_bytes(),
                             };
-                            let response = format!(
-                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                                body.len(),
-                                body
-                            );
-                            let _ = socket.write_all(response.as_bytes()).await;
-                            let _ = socket.shutdown().await;
-                        });
+                        }
+                        res
                     }
+                    Err(_) => Response::new(500),
                 }
-            }
+            }.boxed()
         });
 
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| napi::Error::from_reason("server state poisoned".to_string()))?;
-        state.shutdown = Some(shutdown_tx);
-        state.task = Some(task);
-        state.port = Some(port);
+        state.router.add_http(method, &path, handler_wrapper);
+        Ok(())
+    }
+
+    #[napi]
+    pub async fn listen(&self, port: u16) -> napi::Result<()> {
+        let (server, shutdown) = {
+            let mut state = self.state.lock().map_err(|_| napi::Error::from_reason("Poisoned"))?;
+            if state.task.is_some() {
+                return Err(napi::Error::from_reason("Already listening"));
+            }
+
+            // Move the router into an Arc for the server.
+            // We take it from state and replace with a fresh one if we want to support multiple listens,
+            // but usually listen is called once.
+            let router = std::mem::take(&mut state.router);
+            let config = ServerConfig::default();
+            let server = HttpServer::new(router, config);
+            let shutdown = CancellationToken::new();
+            
+            state.shutdown = Some(shutdown.clone());
+            state.port = Some(port);
+            (server, shutdown)
+        };
+
+        let addr = format!("127.0.0.1:{}", port);
+        let state_clone = self.state.clone();
+        
+        let task = tokio::spawn(async move {
+            let res = server.run(&addr, shutdown).await;
+            if let Ok(mut state) = state_clone.lock() {
+                state.task = None;
+                state.port = None;
+            }
+            res
+        });
+
+        if let Ok(mut state) = self.state.lock() {
+            state.task = Some(task);
+        }
+
         Ok(())
     }
 
     #[napi]
     pub async fn close(&self) -> napi::Result<()> {
-        let task = {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| napi::Error::from_reason("server state poisoned".to_string()))?;
-            if let Some(shutdown) = state.shutdown.take() {
-                let _ = shutdown.send(());
-            }
-            state.port = None;
-            state.task.take()
+        let (shutdown, task) = {
+            let mut state = self.state.lock().map_err(|_| napi::Error::from_reason("Poisoned"))?;
+            (state.shutdown.take(), state.task.take())
         };
+
+        if let Some(token) = shutdown {
+            token.cancel();
+        }
 
         if let Some(task) = task {
             let _ = task.await;
@@ -1239,5 +1461,54 @@ mod tests {
             &text[..40.min(text.len())]
         );
         assert!(text.contains("Content-Length: 9\r\n"));
+    }
+
+    // ── Chunked transfer-encoding ────────────────────────────
+
+    /// Build a minimal HTTP/1.1 request with Transfer-Encoding: chunked and
+    /// two data chunks, then verify parse_request assembles the full body.
+    ///
+    /// Wire format used (RFC 7230 §4.1):
+    ///   POST /upload HTTP/1.1\r\n
+    ///   Transfer-Encoding: chunked\r\n
+    ///   \r\n
+    ///   5\r\n          ← chunk 1: 5 bytes
+    ///   Hello\r\n
+    ///   6\r\n          ← chunk 2: 6 bytes
+    ///   World!\r\n
+    ///   0\r\n          ← terminal chunk
+    ///   \r\n
+    #[tokio::test]
+    async fn parse_request_chunked_body_two_chunks() {
+        let raw = b"POST /upload HTTP/1.1\r\n\
+                    Host: localhost\r\n\
+                    Transfer-Encoding: chunked\r\n\
+                    \r\n\
+                    5\r\n\
+                    Hello\r\n\
+                    6\r\n\
+                    World!\r\n\
+                    0\r\n\
+                    \r\n";
+
+        let (client, server) = tokio::io::duplex(4096);
+
+        // Write the request bytes into the duplex and then close the write side.
+        let write_task = tokio::spawn(async move {
+            let mut w = client;
+            w.write_all(raw).await.unwrap();
+            // Shutdown the write half so the parser sees EOF if it over-reads.
+            w.shutdown().await.unwrap();
+        });
+
+        let mut stream: Box<dyn AsyncStream> = Box::new(server);
+        let peer: std::net::SocketAddr = "127.0.0.1:12345".parse().unwrap();
+        let req = parse_request(&mut stream, peer).await.unwrap();
+
+        write_task.await.unwrap();
+
+        assert_eq!(req.method, Method::POST);
+        assert_eq!(req.path, "/upload");
+        assert_eq!(req.body, b"HelloWorld!");
     }
 }
