@@ -779,6 +779,7 @@ impl JsQueue {
     }
 }
 
+#[cfg(not(feature = "noop"))]
 impl Default for JsQueue {
     fn default() -> Self {
         Self::new()
@@ -838,11 +839,13 @@ impl JsWorker {
     }
 }
 
+#[cfg(not(feature = "noop"))]
 #[napi]
 pub fn create_queue() -> JsQueue {
     JsQueue::new()
 }
 
+#[cfg(not(feature = "noop"))]
 fn parse_uuid(value: &str) -> napi::Result<Uuid> {
     Uuid::parse_str(value).map_err(|err| napi::Error::from_reason(err.to_string()))
 }
