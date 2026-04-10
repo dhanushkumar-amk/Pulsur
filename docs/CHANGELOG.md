@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.6.0...v0.7.0) (2026-04-07)
+
+
+### Features
+
+* implement backend load balancer with health checks, session persistence, and connection draining ([da5f485](https://github.com/dhanushkumar-amk/Pulsur/commit/da5f485f3148e29931f11b09d318a08293dc30d7))
+* introduce JS SDK and HTTP server packages with comprehensive documentation and streamlined release scripts ([a1b19c0](https://github.com/dhanushkumar-amk/Pulsur/commit/a1b19c04bb2dac541330ce7d9de8b1ebbba8361e))
+
 ## [0.6.0](https://github.com/dhanushkumar-amk/Pulsur/compare/v0.5.0...v0.6.0) (2026-04-07)
 
 
